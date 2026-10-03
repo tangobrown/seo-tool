@@ -8,7 +8,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import { loginAttempts } from "@/db/schema";
 import { audit } from "@/lib/audit";
-import { safeEqual } from "@/lib/crypto";
+import { safeEqual, sha256 } from "@/lib/crypto";
 import { createSessionToken, SESSION_COOKIE, sessionCookieOptions } from "@/lib/session";
 
 const MAX_FAILURES = 5;
@@ -46,10 +46,13 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
   const adminEmail = process.env.ADMIN_EMAIL ?? "";
   const hash = process.env.ADMIN_PASSWORD_HASH ?? "";
   const emailOk = safeEqual(parsed.data.email.toLowerCase(), adminEmail.toLowerCase());
+  const plain = process.env.ADMIN_PASSWORD ?? "";
   let passwordOk = false;
   try {
-    // Always run the hash check, even with a wrong email, so timing doesn't leak which part was wrong.
-    passwordOk = hash ? await verify(hash, parsed.data.password) : false;
+    // Always run the password check, even with a wrong email, so timing doesn't leak which part was wrong.
+    if (hash) passwordOk = await verify(hash, parsed.data.password);
+    // Plain-text fallback. Comparing SHA-256 digests keeps the compare constant-time and length-independent.
+    else if (plain) passwordOk = safeEqual(sha256(parsed.data.password), sha256(plain));
   } catch {
     passwordOk = false;
   }
