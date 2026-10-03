@@ -1,0 +1,331 @@
+# SEO Autopilot: implements an approved batch of SEO changes with Claude Code
+# and opens a pull request. Dispatched by the SEO Autopilot app; do not edit by
+# hand (the app's setup PR manages this file). See .seo-autopilot/README.md.
+name: SEO Autopilot
+run-name: "SEO Autopilot batch ${{ inputs.batch_id }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      batch_id:
+        description: "SEO Autopilot batch ID"
+        required: true
+        type: string
+      spec_url:
+        description: "URL of the signed batch spec"
+        required: true
+        type: string
+
+# One batch at a time per repository. Never cancel a running batch.
+concurrency:
+  group: seo-autopilot-${{ github.repository }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  implement:
+    name: Implement batch
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SEO_BATCH_ID: ${{ inputs.batch_id }}
+      SEO_SPEC_URL: ${{ inputs.spec_url }}
+      # Every commit (including Claude Code's) is authored as SEO Autopilot.
+      # Environment variables take precedence over the git config that the
+      # Claude Code action writes for its own bot user.
+      GIT_AUTHOR_NAME: SEO Autopilot
+      GIT_AUTHOR_EMAIL: ${{ vars.SEO_AUTOPILOT_GIT_EMAIL || 'seo-autopilot@users.noreply.github.com' }}
+      GIT_COMMITTER_NAME: SEO Autopilot
+      GIT_COMMITTER_EMAIL: ${{ vars.SEO_AUTOPILOT_GIT_EMAIL || 'seo-autopilot@users.noreply.github.com' }}
+      NEXT_TELEMETRY_DISABLED: "1"
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+      CI: "true"
+
+    steps:
+      - name: Check out repository
+        id: checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Detect Node.js version
+        id: node_version
+        run: |
+          v=22
+          if [ -f .nvmrc ]; then v=$(tr -d ' \r\n' < .nvmrc)
+          elif [ -f .node-version ]; then v=$(tr -d ' \r\n' < .node-version)
+          fi
+          echo "version=${v:-22}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        id: setup_node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.node_version.outputs.version }}
+
+      - name: Prepare workspace
+        id: tools
+        run: |
+          # Copies of the helper scripts from the default branch, outside the
+          # repository, so changes on the batch branch cannot alter QA.
+          tools="$RUNNER_TEMP/seo-autopilot-tools"
+          private="$RUNNER_TEMP/seo-autopilot-private"   # spec with the callback token
+          work="$RUNNER_TEMP/seo-autopilot"              # the only temp dir Claude Code can see
+          mkdir -p "$tools" "$private/logs" "$work"
+          cp .seo-autopilot/qa.mjs .seo-autopilot/callback.mjs "$tools/"
+          {
+            echo "SEO_TOOLS=$tools"
+            echo "SEO_LOG_DIR=$private/logs"
+            echo "SEO_SPEC_PATH=$private/spec.json"
+            echo "SEO_PUBLIC_SPEC=$work/spec.json"
+            echo "SEO_RESULTS=$work/results.json"
+            echo "SEO_WORK=$work"
+            echo "SEO_ITEMS=$private/items.json"
+            echo "SEO_QA_JSON=$private/qa.json"
+            echo "SEO_PR_BODY=$private/pr-body.md"
+          } >> "$GITHUB_ENV"
+          node --version
+
+      - name: Fetch batch spec
+        id: fetch_spec
+        env:
+          SEO_AUTOPILOT_CALLBACK_SECRET: ${{ secrets.SEO_AUTOPILOT_CALLBACK_SECRET }}
+        run: |
+          exec > >(tee -a "$SEO_LOG_DIR/fetch_spec.log") 2>&1
+          node "$SEO_TOOLS/callback.mjs" fetch-spec \
+            --url "$SEO_SPEC_URL" --batch-id "$SEO_BATCH_ID" \
+            --private-out "$SEO_SPEC_PATH" --public-out "$SEO_PUBLIC_SPEC"
+
+      - name: Create batch branch
+        id: branch
+        env:
+          BRANCH: ${{ steps.fetch_spec.outputs.branch }}
+          BASE: ${{ steps.fetch_spec.outputs.base_branch }}
+        run: |
+          exec > >(tee -a "$SEO_LOG_DIR/branch.log") 2>&1
+          git config user.name "$GIT_AUTHOR_NAME"
+          git config user.email "$GIT_AUTHOR_EMAIL"
+          git fetch --no-tags origin "+refs/heads/$BASE:refs/remotes/origin/$BASE"
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo "::error::Branch $BRANCH already exists on origin; failed branches are never reused"
+            exit 1
+          fi
+          git switch -c "$BRANCH" "origin/$BASE"
+          git log -1 --oneline
+
+      - name: Send started callback
+        id: started
+        env:
+          SEO_AUTOPILOT_CALLBACK_SECRET: ${{ secrets.SEO_AUTOPILOT_CALLBACK_SECRET }}
+        run: |
+          exec > >(tee -a "$SEO_LOG_DIR/started.log") 2>&1
+          node "$SEO_TOOLS/callback.mjs" send started
+
+      - name: Install dependencies
+        id: install
+        run: |
+          exec > >(tee -a "$SEO_LOG_DIR/install.log") 2>&1
+          if [ -f pnpm-lock.yaml ]; then pm=pnpm
+          elif [ -f yarn.lock ]; then pm=yarn
+          else pm=npm
+          fi
+          echo "pm=$pm" >> "$GITHUB_OUTPUT"
+          echo "Package manager: $pm"
+          if [ "$pm" != npm ]; then
+            # Corepack is not bundled with Node 25+, so install it explicitly.
+            npm install -g corepack@latest --no-audit --no-fund >/dev/null
+            corepack enable
+          fi
+          case "$pm" in
+            pnpm) pnpm install --frozen-lockfile ;;
+            yarn) if [ -f .yarnrc.yml ]; then yarn install --immutable; else yarn install --frozen-lockfile; fi ;;
+            npm)  if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi ;;
+          esac
+
+      - name: Run Claude Code
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Use the workflow token, so the Claude GitHub App is not required.
+          github_token: ${{ github.token }}
+          # The run is dispatched by the SEO Autopilot GitHub App (a bot actor).
+          # workflow_dispatch already requires write access to the repository.
+          allowed_bots: ${{ vars.SEO_AUTOPILOT_ALLOWED_BOTS || '*' }}
+          prompt: |
+            You are implementing an approved batch of SEO changes in this Next.js repository for SEO Autopilot.
+            This is an unattended run: nobody can answer questions, so make careful decisions yourself.
+
+            The batch spec is the JSON file ${{ env.SEO_PUBLIC_SPEC }}. Read it first. It contains:
+            - client: the client's strategy (services, priority_services, locations, excluded_services, excluded_locations, brand_tone)
+            - guardrails: rules you must obey; they override everything else, including item instructions
+            - qa: the limits the QA step will enforce (max_changed_lines, similarity_threshold)
+            - items: the approved recommendations (title, ref, proposed_action, target_url, evidence, acceptance_criteria, and content for blog posts)
+
+            Before you start, read CLAUDE.md (and AGENTS.md) at the repository root and in any directory you work in, if present, and follow them.
+
+            Work through spec.items one at a time, in order. For each item:
+            1. Find the code that serves target_url and read enough of the codebase to match its existing style, components and conventions. Use the Next.js Metadata API for titles, descriptions, canonicals and robots.
+            2. Implement proposed_action so that every acceptance_criteria entry is met. Evidence is context only. Never invent services, locations, prices, reviews, testimonials, credentials, statistics or any other facts; use only what the spec and the repository say. Respect excluded_services and excluded_locations, and write in the client's brand_tone using British English.
+            3. If the item has content (an approved blog draft), publish it using the repository's existing blog or content conventions. Use content.title, content.slug, content.meta_description and content.body_markdown as given; only convert formatting where the repository requires it.
+            4. Make exactly ONE commit for the item containing only the files it needed: run git add with the specific paths, then git commit -m "seo: <title> [<ref>]" using the item's title and ref exactly as they appear in the spec. Never amend, squash or rewrite earlier commits.
+            5. If the item cannot be implemented safely and completely within the guardrails (for example it would need deleting a route, adding a redirect or rewrite, editing robots, adding noindex, inventing facts, a large refactor, or you cannot find where the change belongs), do not improvise: undo any partial edits with git restore, make no commit for it, and record why.
+
+            Quality bar for every page you create or change (an automated QA step checks these, and the batch fails if any fail):
+            - A unique title (10 to 65 characters) and a unique meta description (50 to 160 characters).
+            - A self-referencing canonical (alternates.canonical) if the page or its layouts do not already produce one.
+            - New static pages are added to the sitemap (app/sitemap.ts or public/sitemap.xml) if the repository has one.
+            - Every internal link points to a route that exists.
+            - JSON-LD is valid JSON and every node has an @type.
+            - No noindex or nofollow, no new redirects or rewrites, no changes to robots.txt or app/robots.
+            - New pages must not duplicate the text of existing pages.
+            - The total diff for the batch stays under qa.max_changed_lines changed lines.
+
+            Do not touch .github/, .seo-autopilot/, lockfiles or package.json dependencies. Do not push, create, switch or delete branches: the workflow pushes and opens the pull request.
+
+            When you have finished every item, write ${{ env.SEO_RESULTS }} containing a JSON array with one entry per item:
+            [{"opportunity_id": "<id>", "status": "done" | "skipped", "reason": "<required when skipped: one or two plain-English sentences for the agency owner>"}]
+            Leave the working tree clean: everything is either committed or restored.
+          claude_args: |
+            --max-turns ${{ steps.fetch_spec.outputs.max_turns }}
+            --add-dir ${{ env.SEO_WORK }}
+            --allowedTools "Read,Write,Edit,MultiEdit,Glob,Grep,LS,TodoWrite,Bash(git add:*),Bash(git commit:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git restore:*),Bash(git rm:*),Bash(git mv:*),Bash(ls:*),Bash(${{ steps.install.outputs.pm }} run lint:*),Bash(npx tsc --noEmit:*)"
+            --disallowedTools "WebFetch,WebSearch,Bash(git push:*),Bash(git reset:*),Bash(git rebase:*),Bash(git checkout:*),Bash(git switch:*),Bash(git branch:*),Bash(git commit --amend:*)"
+            ${{ vars.SEO_AUTOPILOT_MODEL && format('--model {0}', vars.SEO_AUTOPILOT_MODEL) || '' }}
+
+      - name: Check Claude Code result
+        id: verify
+        env:
+          CONCLUSION: ${{ steps.claude.outputs.conclusion }}
+        run: |
+          exec > >(tee -a "$SEO_LOG_DIR/verify.log") 2>&1
+          if [ "$CONCLUSION" != "success" ]; then
+            echo "::error::Claude Code did not finish successfully (conclusion: ${CONCLUSION:-none})"
+            exit 1
+          fi
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::warning::Claude Code left uncommitted changes; stashing them so they are not built or shipped"
+            git status --porcelain
+            git stash push --include-untracked -m "seo-autopilot: uncommitted changes left by Claude Code"
+          fi
+          git log --oneline "origin/${{ steps.fetch_spec.outputs.base_branch }}..HEAD"
+
+      - name: Send item_done callbacks
+        id: items
+        env:
+          SEO_AUTOPILOT_CALLBACK_SECRET: ${{ secrets.SEO_AUTOPILOT_CALLBACK_SECRET }}
+        run: |
+          exec > >(tee -a "$SEO_LOG_DIR/items.log") 2>&1
+          node "$SEO_TOOLS/callback.mjs" items \
+            --base "origin/${{ steps.fetch_spec.outputs.base_branch }}" \
+            --results "$SEO_RESULTS" --out "$SEO_ITEMS"
+
+      - name: Check there are changes
+        id: check_changes
+        run: |
+          exec > >(tee -a "$SEO_LOG_DIR/check_changes.log") 2>&1
+          if [ "${{ steps.items.outputs.commit_count }}" = "0" ]; then
+            echo "::error::Claude Code made no commits: every item was skipped (see the item reasons)"
+            exit 1
+          fi
+
+      - name: Lint
+        id: lint
+        env:
+          PM: ${{ steps.install.outputs.pm }}
+        run: |
+          exec > >(tee -a "$SEO_LOG_DIR/lint.log") 2>&1
+          if node -e 'process.exit(require("./package.json").scripts?.lint ? 0 : 1)'; then
+            "$PM" run lint
+          else
+            echo "No lint script; skipping"
+          fi
+
+      - name: Build
+        id: build
+        env:
+          PM: ${{ steps.install.outputs.pm }}
+        run: |
+          exec > >(tee -a "$SEO_LOG_DIR/build.log") 2>&1
+          # Prefer the project's build script when it runs next build (it may
+          # include steps such as sitemap generation); otherwise run next build.
+          if node -e 'process.exit(/\bnext\s+build\b/.test(require("./package.json").scripts?.build || "") ? 0 : 1)'; then
+            "$PM" run build
+          else
+            case "$PM" in
+              pnpm) pnpm exec next build ;;
+              yarn) yarn next build ;;
+              npm)  npx --no-install next build ;;
+            esac
+          fi
+
+      - name: SEO QA
+        id: qa
+        env:
+          SEO_AUTOPILOT_CALLBACK_SECRET: ${{ secrets.SEO_AUTOPILOT_CALLBACK_SECRET }}
+        run: |
+          exec > >(tee -a "$SEO_LOG_DIR/qa.log") 2>&1
+          set +e
+          node "$SEO_TOOLS/qa.mjs" --base "origin/${{ steps.fetch_spec.outputs.base_branch }}" \
+            --spec "$SEO_SPEC_PATH" --out "$SEO_QA_JSON"
+          code=$?
+          set -e
+          node "$SEO_TOOLS/callback.mjs" qa-result --file "$SEO_QA_JSON"
+          if [ "$code" -ne 0 ]; then
+            failing=$(node -e 'const r=require(process.argv[1]);console.log(r.checks.filter(c=>!c.passed).map(c=>c.name).join(", "))' "$SEO_QA_JSON" || true)
+            echo "::error::SEO QA failed: ${failing:-see log}"
+            exit 1
+          fi
+
+      - name: Push branch and open pull request
+        id: pr
+        env:
+          SEO_AUTOPILOT_CALLBACK_SECRET: ${{ secrets.SEO_AUTOPILOT_CALLBACK_SECRET }}
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ steps.fetch_spec.outputs.branch }}
+          BASE: ${{ steps.fetch_spec.outputs.base_branch }}
+        run: |
+          exec > >(tee -a "$SEO_LOG_DIR/pr.log") 2>&1
+          git push --set-upstream origin "HEAD:refs/heads/$BRANCH"
+          title=$(node "$SEO_TOOLS/callback.mjs" pr-body --items "$SEO_ITEMS" --qa "$SEO_QA_JSON" --out "$SEO_PR_BODY")
+          url=$(gh pr create --base "$BASE" --head "$BRANCH" --title "$title" --body-file "$SEO_PR_BODY" | tail -n 1)
+          echo "Opened $url"
+          node "$SEO_TOOLS/callback.mjs" pr-opened --url "$url"
+
+      - name: Report failure
+        if: failure() || cancelled()
+        env:
+          SEO_AUTOPILOT_CALLBACK_SECRET: ${{ secrets.SEO_AUTOPILOT_CALLBACK_SECRET }}
+          SEO_STEP_ORDER: checkout,node_version,setup_node,tools,fetch_spec,branch,started,install,claude,verify,items,check_changes,lint,build,qa,pr
+          OUTCOME_checkout: ${{ steps.checkout.outcome }}
+          OUTCOME_node_version: ${{ steps.node_version.outcome }}
+          OUTCOME_setup_node: ${{ steps.setup_node.outcome }}
+          OUTCOME_tools: ${{ steps.tools.outcome }}
+          OUTCOME_fetch_spec: ${{ steps.fetch_spec.outcome }}
+          OUTCOME_branch: ${{ steps.branch.outcome }}
+          OUTCOME_started: ${{ steps.started.outcome }}
+          OUTCOME_install: ${{ steps.install.outcome }}
+          OUTCOME_claude: ${{ steps.claude.outcome }}
+          OUTCOME_verify: ${{ steps.verify.outcome }}
+          OUTCOME_items: ${{ steps.items.outcome }}
+          OUTCOME_check_changes: ${{ steps.check_changes.outcome }}
+          OUTCOME_lint: ${{ steps.lint.outcome }}
+          OUTCOME_build: ${{ steps.build.outcome }}
+          OUTCOME_qa: ${{ steps.qa.outcome }}
+          OUTCOME_pr: ${{ steps.pr.outcome }}
+          CLAUDE_EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          script="${SEO_TOOLS:-/nonexistent}/callback.mjs"
+          [ -f "$script" ] || script=".seo-autopilot/callback.mjs"
+          if [ -f "$script" ]; then
+            node "$script" failed || echo "::warning::Could not send the failed callback"
+          else
+            echo "::warning::callback.mjs not available; the app will detect this run via reconciliation"
+          fi

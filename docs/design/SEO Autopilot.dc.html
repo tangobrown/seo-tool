@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:"Inter",ui-sans-serif,system-ui,sans-serif;color:#2f2e2b;background:#fff;-webkit-font-smoothing:antialiased}
+a{color:#2f2e2b;text-decoration:underline;text-decoration-color:#cfcdc8}
+a:hover{color:#000;text-decoration-color:#2f2e2b}
+*{box-sizing:border-box}
+input,select,textarea,button{font-family:inherit;color:inherit}
+</style>
+</helmet>
+<div style="display:flex;height:100vh;width:100%;overflow:hidden;font-size:14px;line-height:1.5">
+
+  <aside style="width:240px;flex-shrink:0;background:#f8f7f5;border-right:1px solid #ebeae6;display:flex;flex-direction:column;padding:10px 8px;gap:2px;overflow-y:auto">
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 8px 14px">
+      <div style="width:22px;height:22px;border-radius:5px;background:#2f2e2b;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">TB</div>
+      <div style="font-weight:600;font-size:14px">{{ workspaceName }}</div>
+    </div>
+    <div onClick="{{ goClients }}" style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:5px;cursor:pointer;background:{{ navClientsBg }};font-weight:500;color:#45433f" style-hover="background:#efeeeb">
+      <span>Clients</span><span style="color:#a5a39e;font-size:12px">{{ clientCount }}</span>
+    </div>
+    <div onClick="{{ goSettings }}" style="display:flex;align-items:center;padding:5px 8px;border-radius:5px;cursor:pointer;background:{{ navSettingsBg }};font-weight:500;color:#45433f" style-hover="background:#efeeeb">Settings</div>
+    <div style="font-size:12px;color:#a5a39e;font-weight:500;padding:18px 8px 4px">Your clients</div>
+    <sc-for list="{{ sideClients }}" as="c" hint-placeholder-count="5">
+      <div onClick="{{ c.onClick }}" style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:5px;cursor:pointer;background:{{ c.bg }};color:#45433f" style-hover="background:#efeeeb">
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.name }}</span>
+        <sc-if value="{{ c.hasPending }}" hint-placeholder-val="{{ false }}">
+          <span style="font-size:11px;font-weight:600;color:#a23b2c;background:#fbe8e5;border-radius:9px;padding:0 6px;line-height:17px">{{ c.pending }}</span>
+        </sc-if>
+      </div>
+    </sc-for>
+    <div onClick="{{ openAdd }}" style="padding:4px 8px;border-radius:5px;cursor:pointer;color:#a5a39e" style-hover="background:#efeeeb;color:#45433f">+ Add client</div>
+  </aside>
+
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <div style="height:44px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 16px;gap:12px">
+      <div style="display:flex;align-items:center;gap:4px;min-width:0;color:#7d7b76">
+        <sc-for list="{{ crumbs }}" as="cr" hint-placeholder-count="1">
+          <div style="display:flex;align-items:center;gap:4px;min-width:0">
+            <sc-if value="{{ cr.notFirst }}" hint-placeholder-val="{{ false }}"><span style="color:#cfcdc8">/</span></sc-if>
+            <span onClick="{{ cr.onClick }}" style="padding:2px 6px;border-radius:4px;cursor:pointer;color:{{ cr.color }};white-space:nowrap" style-hover="background:#f3f2ef">{{ cr.label }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="font-size:12px;color:#a5a39e;white-space:nowrap">Synced with Search Console 12 min ago</div>
+    </div>
+
+    <div style="flex:1;overflow-y:auto">
+      <div style="max-width:920px;margin:0 auto;padding:36px 48px 120px">
+
+        <sc-if value="{{ isClients }}" hint-placeholder-val="{{ true }}">
+          <h1 style="font-size:36px;font-weight:700;letter-spacing:-0.02em;margin:0 0 6px">Clients</h1>
+          <div style="color:#7d7b76;margin-bottom:28px">{{ dashSubtitle }}</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:8px;border-bottom:1px solid #ebeae6">
+            <input value="{{ search }}" onChange="{{ onSearch }}" placeholder="Search clients…" style="border:none;outline:none;background:transparent;font-size:14px;padding:4px 0;flex:1;min-width:0"></input>
+            <button onClick="{{ openAdd }}" style="border:none;background:#2f2e2b;color:#fff;font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;cursor:pointer" style-hover="background:#000">New client</button>
+          </div>
+          <div style="display:grid;grid-template-columns:minmax(0,2.4fr) minmax(0,0.9fr) minmax(0,1.1fr) minmax(0,1fr) minmax(0,1.2fr);gap:12px;padding:8px 6px;color:#a5a39e;font-size:12px;border-bottom:1px solid #ebeae6">
+            <div>Client</div><div>Tier</div><div>Pending</div><div>Last report</div><div>Organic clicks (30d)</div>
+          </div>
+          <sc-for list="{{ clientRows }}" as="r" hint-placeholder-count="5">
+            <div onClick="{{ r.onClick }}" style="display:grid;grid-template-columns:minmax(0,2.4fr) minmax(0,0.9fr) minmax(0,1.1fr) minmax(0,1fr) minmax(0,1.2fr);gap:12px;padding:12px 6px;border-bottom:1px solid #ebeae6;cursor:pointer;align-items:center" style-hover="background:#f8f7f5">
+              <div style="display:flex;align-items:center;gap:10px;min-width:0">
+                <div style="min-width:0">
+                  <div style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.name }}</div>
+                  
+                </div>
+              </div>
+              <div><span style="font-size:12px;padding:1px 7px;border-radius:4px;background:{{ r.tierBg }};color:{{ r.tierFg }}">{{ r.tier }}</span></div>
+              <div>
+                <sc-if value="{{ r.hasPending }}" hint-placeholder-val="{{ true }}">
+                  <span style="display:inline-flex;align-items:center;gap:6px;font-weight:500"><span style="width:6px;height:6px;border-radius:3px;background:#d4574a"></span>{{ r.pendingLabel }}</span>
+                </sc-if>
+                <sc-if value="{{ r.noPending }}" hint-placeholder-val="{{ false }}">
+                  <span style="color:#a5a39e">{{ r.pendingLabel }}</span>
+                </sc-if>
+              </div>
+              <div style="color:#7d7b76">{{ r.lastReport }}</div>
+              <div style="display:flex;gap:8px;align-items:baseline"><span>{{ r.clicks }}</span><span style="font-size:12px;color:{{ r.deltaColor }}">{{ r.delta }}</span></div>
+            </div>
+          </sc-for>
+          <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:24px 6px;color:#a5a39e">No clients match “{{ search }}”.</div>
+          </sc-if>
+        </sc-if>
+
+        <sc-if value="{{ isClient }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
+            <div style="min-width:0">
+              <h1 style="font-size:32px;font-weight:700;letter-spacing:-0.02em;margin:0;line-height:1.2">{{ cl.name }}</h1>
+              <div style="display:flex;gap:10px;align-items:center;color:#7d7b76;margin-top:2px;flex-wrap:wrap">
+                <span>{{ cl.domain }}</span><span style="color:#cfcdc8">·</span>
+                <span style="font-size:12px;padding:1px 7px;border-radius:4px;background:{{ cl.tierBg }};color:{{ cl.tierFg }}">{{ cl.tier }}</span>
+                <span style="font-size:12px;color:#a5a39e">{{ cl.tierInfo }}</span>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:20px;border-bottom:1px solid #ebeae6;margin:24px 0 20px">
+            <sc-for list="{{ clientTabs }}" as="t" hint-placeholder-count="3">
+              <div onClick="{{ t.onClick }}" style="display:flex;align-items:center;gap:6px;padding:8px 0;margin-bottom:-1px;cursor:pointer;color:{{ t.color }};border-bottom:2px solid {{ t.bd }};font-weight:500">
+                <span>{{ t.label }}</span>
+                <sc-if value="{{ t.hasCount }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px;font-weight:600;color:#a23b2c;background:#fbe8e5;border-radius:9px;padding:0 6px;line-height:17px">{{ t.count }}</span></sc-if>
+              </div>
+            </sc-for>
+          </div>
+
+          <sc-if value="{{ isRecs }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 4px;border-top:1px solid #ebeae6;border-bottom:1px solid #ebeae6;min-height:48px;position:sticky;top:0;background:#fff;z-index:2">
+              <div onClick="{{ toggleAll }}" style="display:flex;align-items:center;gap:10px;cursor:pointer;color:#5f5d58;font-weight:500">
+                <div style="width:16px;height:16px;border-radius:4px;border:1.5px solid {{ allBox.cbBd }};background:{{ allBox.cbBg }};color:#fff;font-size:11px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0">{{ allBox.check }}</div>
+                <span>{{ selLabel }}</span>
+              </div>
+              <div style="display:flex;gap:6px;opacity:{{ bulkOpacity }};pointer-events:{{ bulkPE }}">
+                <button onClick="{{ bulkDecline }}" style="border:1px solid #e3e2de;background:#fff;color:#a23b2c;font-size:13px;font-weight:500;padding:5px 11px;border-radius:6px;cursor:pointer" style-hover="background:#fbe8e5">Decline</button>
+                <button onClick="{{ bulkDefer }}" style="border:1px solid #e3e2de;background:#fff;color:#5f5d58;font-size:13px;font-weight:500;padding:5px 11px;border-radius:6px;cursor:pointer" style-hover="background:#f3f2ef">Defer</button>
+                <button onClick="{{ bulkApprove }}" style="border:1px solid #2f2e2b;background:#2f2e2b;color:#fff;font-size:13px;font-weight:500;padding:5px 12px;border-radius:6px;cursor:pointer" style-hover="background:#000">{{ approveLabel }}</button>
+              </div>
+            </div>
+            <sc-if value="{{ recsEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:48px 0;text-align:center;color:#a5a39e">{{ recsEmptyText }}</div>
+            </sc-if>
+            <sc-for list="{{ recs }}" as="rc" hint-placeholder-count="4">
+              <div onClick="{{ rc.onToggle }}" style="display:flex;gap:14px;padding:16px 4px;border-bottom:1px solid #ebeae6;align-items:flex-start;cursor:pointer;background:{{ rc.rowBg }}" style-hover="background:#fbfbfa">
+                <div style="padding-top:3px"><div style="width:16px;height:16px;border-radius:4px;border:1.5px solid {{ rc.cbBd }};background:{{ rc.cbBg }};color:#fff;font-size:11px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0">{{ rc.check }}</div></div>
+                <div style="flex:1;min-width:0">
+                  <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+                      <span style="font-size:12px;padding:0 6px;border-radius:4px;background:{{ rc.catBg }};color:{{ rc.catFg }}">{{ rc.cat }}</span>
+                      <span style="font-size:12px;padding:0 6px;border-radius:4px;background:{{ rc.impBg }};color:{{ rc.impFg }}">{{ rc.impact }} impact</span>
+                  </div>
+                    <div style="font-weight:600;font-size:15px;text-wrap:pretty">{{ rc.title }}</div>
+                    <sc-if value="{{ showDesc }}" hint-placeholder-val="{{ true }}">
+                      <div style="color:#7d7b76;margin-top:3px;text-wrap:pretty">{{ rc.desc }}</div>
+                    </sc-if>
+                    <div style="font-size:12px;color:#a5a39e;margin-top:6px">{{ rc.url }}</div>
+                </div>
+              </div>
+            </sc-for>
+            <div style="font-size:12px;color:#a5a39e;margin-top:12px">Approved recommendations are sent to Claude Code as one batch.</div>
+          </sc-if>
+
+          <sc-if value="{{ isActioned }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+              <sc-for list="{{ actFilters }}" as="f" hint-placeholder-count="4">
+                <div onClick="{{ f.onClick }}" style="padding:3px 10px;border-radius:14px;cursor:pointer;font-size:13px;background:{{ f.bg }};color:{{ f.fg }};border:1px solid {{ f.bd }}">{{ f.label }} <span style="opacity:0.6">{{ f.count }}</span></div>
+              </sc-for>
+            </div>
+            <div style="border-top:1px solid #ebeae6">
+              <sc-if value="{{ actEmpty }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:48px 0;text-align:center;color:#a5a39e">Nothing here yet.</div>
+              </sc-if>
+              <sc-for list="{{ actioned }}" as="rc" hint-placeholder-count="4">
+                <div style="display:flex;gap:20px;padding:16px 4px;border-bottom:1px solid #ebeae6;align-items:flex-start">
+                  <div style="flex:1;min-width:0">
+                    <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+                      <span style="font-size:12px;padding:0 6px;border-radius:4px;background:{{ rc.catBg }};color:{{ rc.catFg }}">{{ rc.cat }}</span>
+                      <span style="font-size:12px;padding:0 6px;border-radius:4px;background:{{ rc.impBg }};color:{{ rc.impFg }}">{{ rc.impact }} impact</span>
+                    </div>
+                    <div style="font-weight:600;font-size:15px;text-wrap:pretty">{{ rc.title }}</div>
+                    <sc-if value="{{ showDesc }}" hint-placeholder-val="{{ true }}">
+                      <div style="color:#7d7b76;margin-top:3px;text-wrap:pretty">{{ rc.desc }}</div>
+                    </sc-if>
+                    <div style="font-size:12px;color:#a5a39e;margin-top:6px">{{ rc.url }}</div>
+                  </div>
+                  <div style="display:flex;gap:10px;align-items:center;flex-shrink:0">
+                    <span style="font-size:12px;padding:1px 8px;border-radius:4px;background:{{ rc.stBg }};color:{{ rc.stFg }}">{{ rc.statusLabel }}</span>
+                    <span onClick="{{ rc.onUndo }}" style="font-size:13px;color:#a5a39e;cursor:pointer" style-hover="color:#2f2e2b">Move back</span>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isReports }}" hint-placeholder-val="{{ false }}">
+            <sc-if value="{{ reportsEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:48px 0;text-align:center;color:#a5a39e;border-top:1px solid #ebeae6">Connecting to Search Console and Analytics. Data will appear within 24 hours — the first monthly report generates on 1 Nov 2026.</div>
+            </sc-if>
+            <sc-if value="{{ showOverview }}" hint-placeholder-val="{{ true }}">
+              <sc-if value="{{ hasNewReport }}" hint-placeholder-val="{{ true }}">
+                <div onClick="{{ openLatest }}" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-radius:8px;background:#f8f7f5;cursor:pointer;margin-bottom:28px" style-hover="background:#f1f0ec">
+                  <div><span style="font-weight:600">{{ latestLabel }} report is ready.</span> <span style="color:#7d7b76">Generated 1 Oct — review it and copy into an email.</span></div>
+                  <span style="font-weight:500;white-space:nowrap">Open →</span>
+                </div>
+              </sc-if>
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+                <div style="font-weight:600;font-size:16px">Last 30 days</div>
+                <div style="font-size:12px;color:#a5a39e">vs previous 30 days</div>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:#ebeae6;border:1px solid #ebeae6;border-radius:8px;overflow:hidden;margin-bottom:28px">
+                <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="4">
+                  <div style="background:#fff;padding:14px 16px">
+                    <div style="font-size:12px;color:#7d7b76">{{ k.label }}</div>
+                    <div style="font-size:24px;font-weight:600;letter-spacing:-0.01em;margin-top:2px">{{ k.value }}</div>
+                    <div style="font-size:12px;color:{{ k.color }}">{{ k.delta }}</div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="font-weight:600;font-size:16px;margin-bottom:12px">Organic clicks by month</div>
+              <div style="display:flex;align-items:flex-end;gap:8px;height:140px;padding-bottom:4px;border-bottom:1px solid #ebeae6">
+                <sc-for list="{{ bars }}" as="b" hint-placeholder-count="12">
+                  <div title="{{ b.tip }}" style="flex:1;height:{{ b.h }};background:{{ b.bg }};border-radius:3px 3px 0 0;min-width:0"></div>
+                </sc-for>
+              </div>
+              <div style="display:flex;gap:8px;margin:6px 0 32px">
+                <sc-for list="{{ bars }}" as="b" hint-placeholder-count="12">
+                  <div style="flex:1;text-align:center;font-size:11px;color:#a5a39e;min-width:0">{{ b.label }}</div>
+                </sc-for>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:32px;margin-bottom:36px">
+                <div>
+                  <div style="font-weight:600;font-size:16px;margin-bottom:6px">Top pages</div>
+                  <sc-for list="{{ topPages }}" as="p" hint-placeholder-count="5">
+                    <div style="display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid #ebeae6">
+                      <span style="font-size:12.5px;color:#45433f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.path }}</span>
+                      <span style="color:#7d7b76">{{ p.clicks }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+                <div>
+                  <div style="font-weight:600;font-size:16px;margin-bottom:6px">Top keywords</div>
+                  <sc-for list="{{ topKws }}" as="kw" hint-placeholder-count="5">
+                    <div style="display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid #ebeae6">
+                      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ kw.kw }}</span>
+                      <span style="display:flex;gap:10px;white-space:nowrap"><span style="color:#7d7b76">#{{ kw.pos }}</span><span style="font-size:12px;color:{{ kw.color }};width:28px;text-align:right">{{ kw.chg }}</span></span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="font-weight:600;font-size:16px;margin-bottom:6px">Monthly reports</div>
+              <div style="font-size:13px;color:#7d7b76;margin-bottom:8px">A summary of the previous month is generated on the 1st of each month.</div>
+              <div style="border-top:1px solid #ebeae6">
+                <sc-for list="{{ reportList }}" as="rp" hint-placeholder-count="3">
+                  <div onClick="{{ rp.onClick }}" style="display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid #ebeae6;cursor:pointer" style-hover="background:#f8f7f5">
+                    <div style="width:20px;height:24px;border:1.5px solid #cfcdc8;border-radius:3px;flex-shrink:0"></div>
+                    <div style="flex:1;font-weight:500">{{ rp.label }}</div>
+                    <sc-if value="{{ rp.isNew }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;padding:0 7px;border-radius:4px;background:#e4edfa;color:#2a5ca8">New</span></sc-if>
+                    <div style="color:#a5a39e;font-size:13px;white-space:nowrap">Generated {{ rp.generated }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ showReport }}" hint-placeholder-val="{{ false }}">
+              <div onClick="{{ closeReport }}" style="display:inline-block;color:#7d7b76;cursor:pointer;padding:2px 6px;margin-left:-6px;border-radius:4px;margin-bottom:16px" style-hover="background:#f3f2ef">← All reports</div>
+              <div style="max-width:680px">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
+                  <h2 style="font-size:32px;font-weight:600;letter-spacing:-0.01em;margin:0;line-height:1.2">{{ rep.label }} report</h2>
+                  <button onClick="{{ copyReport }}" style="border:none;background:#2f2e2b;color:#fff;font-size:13px;font-weight:500;padding:7px 13px;border-radius:6px;cursor:pointer;white-space:nowrap" style-hover="background:#000">{{ copyLabel }}</button>
+                </div>
+                <div style="display:grid;grid-template-columns:120px minmax(0,1fr);row-gap:4px;margin:16px 0 24px;font-size:13px">
+                  <div style="color:#a5a39e">Client</div><div>{{ cl.name }}</div>
+                  <div style="color:#a5a39e">Period</div><div>{{ rep.period }}</div>
+                  <div style="color:#a5a39e">Generated</div><div>{{ rep.generated }}</div>
+                  <div style="color:#a5a39e">Send to</div><div>{{ cl.email }}</div>
+                </div>
+                <div style="border-top:1px solid #ebeae6;padding-top:20px;font-size:17px;line-height:1.6">
+                  <p style="margin:0 0 20px;text-wrap:pretty">{{ rep.greeting }}</p>
+                  <p style="margin:0 0 20px;text-wrap:pretty">{{ rep.summary }}</p>
+                  <sc-for list="{{ rep.sections }}" as="sec" hint-placeholder-count="3">
+                    <div style="margin-bottom:20px">
+                      <div style="font-weight:600;font-size:15px;margin-bottom:6px">{{ sec.title }}</div>
+                      <ul style="margin:0;padding-left:22px">
+                        <sc-for list="{{ sec.items }}" as="it" hint-placeholder-count="3">
+                          <li style="margin-bottom:4px;text-wrap:pretty">{{ it }}</li>
+                        </sc-for>
+                      </ul>
+                    </div>
+                  </sc-for>
+                  <p style="margin:0;white-space:pre-line">{{ signoff }}</p>
+                </div>
+              </div>
+            </sc-if>
+          </sc-if>
+
+          <sc-if value="{{ isClientSettings }}" hint-placeholder-val="{{ false }}">
+            <div style="font-weight:600;font-size:16px;margin-bottom:4px">Tier</div>
+            <div style="font-size:13px;color:#7d7b76;margin-bottom:12px">Sets how often content is created and the site is scanned.</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:36px">
+              <sc-for list="{{ tierCards }}" as="tc" hint-placeholder-count="3">
+                <div onClick="{{ tc.onClick }}" style="border:1px solid {{ tc.bd }};box-shadow:0 0 0 1px {{ tc.ring }};border-radius:8px;padding:14px;cursor:pointer;background:#fff" style-hover="background:#fbfbfa">
+                  <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-weight:600">{{ tc.name }}</span><span style="font-size:13px;color:#7d7b76">{{ tc.price }}/mo</span></div>
+                  <div style="font-size:13px;color:#7d7b76;margin-top:8px">{{ tc.posts }} blog posts / month</div>
+                  <div style="font-size:13px;color:#7d7b76">{{ tc.scans }} site scans</div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="font-weight:600;font-size:16px;margin-bottom:6px">Details</div>
+            <div style="border-top:1px solid #ebeae6;margin-bottom:36px">
+              <sc-for list="{{ fields }}" as="fd" hint-placeholder-count="6">
+                <div style="display:grid;grid-template-columns:160px minmax(0,1fr);align-items:center;gap:12px;padding:4px 0;border-bottom:1px solid #ebeae6">
+                  <div style="color:#7d7b76">{{ fd.label }}</div>
+                  <input value="{{ fd.value }}" onChange="{{ fd.onChange }}" style="border:none;outline:none;background:transparent;font-size:14px;padding:6px 8px;border-radius:4px;width:100%" style-hover="background:#f3f2ef" style-focus="background:#f3f2ef"></input>
+                </div>
+              </sc-for>
+              <div style="display:grid;grid-template-columns:160px minmax(0,1fr);align-items:center;gap:12px;padding:6px 0;border-bottom:1px solid #ebeae6">
+                <div style="color:#7d7b76">Target keywords</div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:0 8px">
+                  <sc-for list="{{ kwChips }}" as="ch" hint-placeholder-count="3">
+                    <span style="display:inline-flex;align-items:center;gap:4px;font-size:13px;padding:1px 4px 1px 8px;border-radius:4px;background:#efeeeb">{{ ch.kw }}<span onClick="{{ ch.onRemove }}" style="cursor:pointer;color:#a5a39e;padding:0 3px" style-hover="color:#2f2e2b">×</span></span>
+                  </sc-for>
+                  <input value="{{ kwDraft }}" onChange="{{ onKwDraft }}" onKeyDown="{{ onKwKey }}" placeholder="Add keyword…" style="border:none;outline:none;background:transparent;font-size:13px;padding:4px 0;min-width:110px;flex:1"></input>
+                </div>
+              </div>
+            </div>
+            <div style="font-weight:600;font-size:16px;margin-bottom:6px">Automation</div>
+            <div style="border-top:1px solid #ebeae6;margin-bottom:36px">
+              <sc-for list="{{ clientToggles }}" as="tg" hint-placeholder-count="3">
+                <div onClick="{{ tg.onClick }}" style="display:flex;justify-content:space-between;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #ebeae6;cursor:pointer">
+                  <div><div style="font-weight:500">{{ tg.label }}</div><div style="font-size:13px;color:#7d7b76">{{ tg.desc }}</div></div>
+                  <div style="width:30px;height:18px;border-radius:9px;background:{{ tg.track }};position:relative;flex-shrink:0"><div style="position:absolute;top:2px;left:{{ tg.knob }};width:14px;height:14px;border-radius:7px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,0.2)"></div></div>
+                </div>
+              </sc-for>
+            </div>
+            <div onClick="{{ archiveClient }}" style="display:inline-block;color:#a23b2c;cursor:pointer;padding:4px 8px;margin-left:-8px;border-radius:4px" style-hover="background:#fbe8e5">Archive client</div>
+          </sc-if>
+        </sc-if>
+
+        <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+          <h1 style="font-size:36px;font-weight:700;letter-spacing:-0.02em;margin:0 0 6px">Settings</h1>
+          <div style="color:#7d7b76">Workspace defaults, tiers and connected tools.</div>
+          <div style="display:flex;gap:20px;border-bottom:1px solid #ebeae6;margin:24px 0 20px">
+            <sc-for list="{{ gsTabs }}" as="t" hint-placeholder-count="4">
+              <div onClick="{{ t.onClick }}" style="padding:8px 0;margin-bottom:-1px;cursor:pointer;color:{{ t.color }};border-bottom:2px solid {{ t.bd }};font-weight:500">{{ t.label }}</div>
+            </sc-for>
+          </div>
+
+          <sc-if value="{{ gsGeneral }}" hint-placeholder-val="{{ true }}">
+            <div style="border-top:1px solid #ebeae6">
+              <sc-for list="{{ gsFields }}" as="fd" hint-placeholder-count="3">
+                <div style="display:grid;grid-template-columns:180px minmax(0,1fr);align-items:center;gap:12px;padding:4px 0;border-bottom:1px solid #ebeae6">
+                  <div style="color:#7d7b76">{{ fd.label }}</div>
+                  <input value="{{ fd.value }}" onChange="{{ fd.onChange }}" style="border:none;outline:none;background:transparent;font-size:14px;padding:6px 8px;border-radius:4px;width:100%" style-hover="background:#f3f2ef" style-focus="background:#f3f2ef"></input>
+                </div>
+              </sc-for>
+              <div style="display:grid;grid-template-columns:180px minmax(0,1fr);align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #ebeae6">
+                <div style="color:#7d7b76">Monthly report</div>
+                <div style="padding:0 8px">Generated on the 1st of each month at 07:00</div>
+              </div>
+              <div style="display:grid;grid-template-columns:180px minmax(0,1fr);align-items:start;gap:12px;padding:4px 0;border-bottom:1px solid #ebeae6">
+                <div style="color:#7d7b76;padding-top:6px">Email sign-off</div>
+                <textarea value="{{ signoff }}" onChange="{{ onSignoff }}" rows="3" style="border:none;outline:none;background:transparent;font-size:14px;padding:6px 8px;border-radius:4px;width:100%;resize:vertical;line-height:1.5" style-hover="background:#f3f2ef" style-focus="background:#f3f2ef"></textarea>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ gsTiers }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:13px;color:#7d7b76;margin-bottom:12px">Changes apply to every client on that tier from the next cycle.</div>
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);gap:12px;padding:8px 0;color:#a5a39e;font-size:12px;border-bottom:1px solid #ebeae6">
+              <div>Tier</div><div>Blog posts / month</div><div>Site scans</div><div>Price / month</div>
+            </div>
+            <sc-for list="{{ tierRows }}" as="tr" hint-placeholder-count="3">
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);gap:12px;padding:4px 0;border-bottom:1px solid #ebeae6;align-items:center">
+                <div style="font-weight:500">{{ tr.name }} <span style="color:#a5a39e;font-weight:400;font-size:12px">{{ tr.clients }}</span></div>
+                <input type="number" value="{{ tr.posts }}" onChange="{{ tr.onPosts }}" style="border:none;outline:none;background:transparent;font-size:14px;padding:6px 8px;margin-left:-8px;border-radius:4px;width:100%" style-hover="background:#f3f2ef" style-focus="background:#f3f2ef"></input>
+                <select value="{{ tr.scans }}" onChange="{{ tr.onScans }}" style="border:none;outline:none;background:transparent;font-size:14px;padding:6px 4px;margin-left:-6px;border-radius:4px;cursor:pointer" style-hover="background:#f3f2ef"><option>Monthly</option><option>Fortnightly</option><option>Weekly</option></select>
+                <input value="{{ tr.price }}" onChange="{{ tr.onPrice }}" style="border:none;outline:none;background:transparent;font-size:14px;padding:6px 8px;margin-left:-8px;border-radius:4px;width:100%" style-hover="background:#f3f2ef" style-focus="background:#f3f2ef"></input>
+              </div>
+            </sc-for>
+          </sc-if>
+
+          <sc-if value="{{ gsIntegrations }}" hint-placeholder-val="{{ false }}">
+            <div style="border-top:1px solid #ebeae6">
+              <sc-for list="{{ integrations }}" as="ig" hint-placeholder-count="6">
+                <div style="display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid #ebeae6">
+                  <div style="width:32px;height:32px;border-radius:7px;border:1px solid #ebeae6;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#5f5d58;flex-shrink:0">{{ ig.letter }}</div>
+                  <div style="flex:1;min-width:0"><div style="font-weight:500">{{ ig.name }}</div><div style="font-size:13px;color:#7d7b76">{{ ig.desc }}</div></div>
+                  <button onClick="{{ ig.onClick }}" style="border:1px solid {{ ig.bd }};background:{{ ig.bg }};color:{{ ig.fg }};font-size:13px;font-weight:500;padding:5px 12px;border-radius:6px;cursor:pointer;white-space:nowrap">{{ ig.btn }}</button>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ gsNotifications }}" hint-placeholder-val="{{ false }}">
+            <div style="border-top:1px solid #ebeae6">
+              <sc-for list="{{ notifToggles }}" as="tg" hint-placeholder-count="3">
+                <div onClick="{{ tg.onClick }}" style="display:flex;justify-content:space-between;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #ebeae6;cursor:pointer">
+                  <div><div style="font-weight:500">{{ tg.label }}</div><div style="font-size:13px;color:#7d7b76">{{ tg.desc }}</div></div>
+                  <div style="width:30px;height:18px;border-radius:9px;background:{{ tg.track }};position:relative;flex-shrink:0"><div style="position:absolute;top:2px;left:{{ tg.knob }};width:14px;height:14px;border-radius:7px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,0.2)"></div></div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </sc-if>
+
+      </div>
+    </div>
+  </main>
+
+  <sc-if value="{{ showAdd }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeAdd }}" style="position:fixed;inset:0;background:rgba(15,15,15,0.35);display:flex;align-items:flex-start;justify-content:center;padding-top:12vh;z-index:20">
+      <div onClick="{{ stop }}" style="width:440px;max-width:calc(100% - 32px);background:#fff;border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,0.18);padding:22px">
+        <div style="font-weight:600;font-size:18px;margin-bottom:4px">New client</div>
+        <div style="font-size:13px;color:#7d7b76;margin-bottom:16px">We’ll run a first site scan as soon as the client is added.</div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <sc-for list="{{ addFields }}" as="fd" hint-placeholder-count="3">
+            <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:#7d7b76">{{ fd.label }}
+              <input value="{{ fd.value }}" onChange="{{ fd.onChange }}" placeholder="{{ fd.ph }}" style="border:1px solid #e3e2de;outline:none;font-size:14px;padding:7px 10px;border-radius:6px;color:#2f2e2b" style-focus="border-color:#a5a39e"></input>
+            </label>
+          </sc-for>
+          <div style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:#7d7b76">Tier
+            <div style="display:flex;gap:6px">
+              <sc-for list="{{ addTiers }}" as="at" hint-placeholder-count="3">
+                <div onClick="{{ at.onClick }}" style="flex:1;text-align:center;padding:6px;border-radius:6px;cursor:pointer;font-size:13px;border:1px solid {{ at.bd }};background:{{ at.bg }};color:{{ at.fg }}">{{ at.name }}</div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px">
+          <button onClick="{{ closeAdd }}" style="border:1px solid #e3e2de;background:#fff;font-size:13px;padding:6px 12px;border-radius:6px;cursor:pointer" style-hover="background:#f3f2ef">Cancel</button>
+          <button onClick="{{ createClient }}" style="border:none;background:{{ createBg }};color:#fff;font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;cursor:pointer">Add client</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ hasToast }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#2f2e2b;color:#fff;border-radius:8px;padding:9px 14px;font-size:13px;display:flex;gap:14px;align-items:center;box-shadow:0 6px 20px rgba(0,0,0,0.18);z-index:30">
+      <span>{{ toastMsg }}</span>
+      <sc-if value="{{ toastHasUndo }}" hint-placeholder-val="{{ false }}"><span onClick="{{ toastUndo }}" style="cursor:pointer;color:#cfcdc8;text-decoration:underline">Undo</span></sc-if>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;startView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Clients&quot;,&quot;Client&quot;,&quot;Settings&quot;],&quot;default&quot;:&quot;Clients&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;recLayout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;List&quot;,&quot;Compact&quot;],&quot;default&quot;:&quot;List&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+const TAG = { gray:['#efeeeb','#5f5d58'], green:['#e4f1e8','#2a6b45'], red:['#fbe8e5','#a23b2c'], yellow:['#faf0d9','#8a6116'], blue:['#e4edfa','#2a5ca8'], purple:['#eee8f6','#6a4a9c'], orange:['#fbeadb','#9a5420'] };
+const CAT = { Technical:'blue', 'On-page':'purple', Content:'orange', Links:'green' };
+const IMPACT = { High:'red', Medium:'yellow', Low:'gray' };
+const STATUS = { pending:['Pending','gray'], approved:['Approved','green'], declined:['Declined','red'], deferred:['Deferred','yellow'] };
+const TIER_C = { Starter:'gray', Growth:'blue', Pro:'purple' };
+const AV = ['#e4edfa|#2a5ca8','#e4f1e8|#2a6b45','#fbeadb|#9a5420','#eee8f6|#6a4a9c','#faf0d9|#8a6116','#fbe8e5|#a23b2c'];
+const MONTHS = ['Oct','Nov','Dec','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep'];
+const FULL = { Sep:'September', Aug:'August', Jul:'July', Jun:'June' };
+const CYCLE = ['approved','approved','deferred','approved','declined'];
+const fmt = n => Math.round(n).toLocaleString('en-US');
+const rnd = (s, i) => { const x = Math.sin(s * 97.13 + i * 12.7) * 43758.5453; return x - Math.floor(x); };
+const initials = n => n.replace(/&/g,'').split(/\s+/).filter(Boolean).slice(0,2).map(w => w[0]).join('').toUpperCase();
+
+const CLIENTS = [
+  { id:'hp', name:'Harbor & Pine Dental', domain:'harborpinedental.com', tier:'Growth', contact:'Dr. Maya Chen', email:'maya@harborpinedental.com', industry:'Dental clinic', location:'Portland, OR', cms:'WordPress', base:2600, seed:1, pending:6, service:'Teeth whitening', oldPost:'How often should you see a dentist?', kws:['dentist portland','teeth whitening portland','emergency dentist portland','invisalign portland','pediatric dentist'], pages:['/','/services/teeth-whitening','/blog/dental-anxiety-tips','/services/invisalign','/contact'], posts:['Is teeth whitening safe? What Portland patients should know','5 signs you need an emergency dentist'] },
+  { id:'nr', name:'Northfield Roofing', domain:'northfieldroofing.com', tier:'Pro', contact:'Dan Okoye', email:'dan@northfieldroofing.com', industry:'Home services', location:'Denver, CO', cms:'Webflow', base:4100, seed:2, pending:4, service:'Roof repair', oldPost:'Metal vs asphalt shingles', kws:['roofing contractor denver','roof repair denver','hail damage roof','roof replacement cost','gutter installation denver'], pages:['/','/roof-repair','/hail-damage','/blog/roof-replacement-cost','/gallery'], posts:['What to do after a Denver hailstorm','How long does a roof replacement take?'] },
+  { id:'ly', name:'Lumen Yoga Studio', domain:'lumenyoga.com', tier:'Starter', contact:'Priya Raman', email:'priya@lumenyoga.com', industry:'Fitness & wellness', location:'Austin, TX', cms:'Squarespace', base:900, seed:3, pending:0, service:'Beginner classes', oldPost:'What to bring to your first class', kws:['yoga austin','hot yoga austin','beginner yoga classes','yoga teacher training texas','prenatal yoga austin'], pages:['/','/schedule','/beginners','/teacher-training','/blog/hot-yoga-benefits'], posts:['Hot yoga vs vinyasa: which is right for you?','A beginner’s first week at Lumen'] },
+  { id:'ol', name:'Okafor Legal', domain:'okaforlegal.com', tier:'Growth', contact:'Chidi Okafor', email:'chidi@okaforlegal.com', industry:'Immigration law', location:'Chicago, IL', cms:'WordPress', base:1700, seed:4, pending:3, service:'Green card applications', oldPost:'H-1B lottery explained', kws:['immigration lawyer chicago','green card attorney','citizenship application help','h1b lawyer chicago','family visa lawyer'], pages:['/','/green-cards','/citizenship','/blog/h1b-lottery','/consultation'], posts:['How long does a green card take in 2026?','Marriage-based visas: a step-by-step guide'] },
+  { id:'bp', name:'Brightside Pet Supplies', domain:'brightsidepets.com', tier:'Pro', contact:'Tom Avery', email:'tom@brightsidepets.com', industry:'E-commerce', location:'United States', cms:'Shopify', base:6800, seed:5, pending:5, service:'Grain-free dog food', oldPost:'Best toys for heavy chewers', kws:['grain free dog food','natural cat litter','dog chew toys','pet supplies online','senior dog food'], pages:['/','/collections/dog-food','/collections/cat-litter','/products/chew-bone-xl','/blog/senior-dog-diet'], posts:['Choosing food for a senior dog','Is natural cat litter worth it?'] },
+];
+
+function recPool(c) {
+  return [
+    ['Technical','High','Fix 14 pages returning 404 errors','Broken internal links are sending visitors and crawlers to dead pages. We’ll add 301 redirects to the closest live page.','/services/*'],
+    ['Content','High',`Publish blog post targeting “${c.kws[1]}”`,`This keyword gets an estimated 1,900 searches a month and ${c.domain} isn’t ranking yet. A 1,500-word guide is drafted and ready for review.`,'/blog/new'],
+    ['On-page','Medium','Rewrite title tags on 6 key pages','Current titles are truncated in search results and miss the primary keyword. Proposed titles stay under 60 characters.',c.pages[1]],
+    ['Technical','Medium','Compress 23 oversized images','Mobile load time is 4.1s. Converting images to WebP should bring it under 2.5s.','/'],
+    ['Links','Medium','Reclaim 3 unlinked brand mentions',`Three local publications mention ${c.name} without linking. We’ll send short outreach emails asking for a link.`,'external'],
+    ['Content','Medium',`Refresh “${c.oldPost}”`,'Traffic to this post is down 38% since spring. We’ll update outdated sections and add a FAQ.',c.pages[2]],
+    ['On-page','Medium',`Add internal links to the ${c.service.toLowerCase()} page`,'Only two pages link here. Adding links from five related blog posts should help it rank.',c.pages[1]],
+    ['On-page','Low','Add FAQ schema to the contact page','Structured data can show your FAQs directly in search results.',c.pages[4]],
+    ['Technical','Low','Add missing alt text to 41 images','Helps accessibility and image search. Descriptions are generated and ready to apply.','/*'],
+    ['Technical','High','Redirect www to non-www','Both versions of the homepage are indexed, splitting ranking signals between them.','/'],
+  ];
+}
+function buildRecs(c) {
+  const pool = recPool(c); const k = c.seed % pool.length;
+  const rot = pool.slice(k).concat(pool.slice(0, k));
+  return rot.map((r, i) => ({ id:c.id+'-'+i, cat:r[0], impact:r[1], title:r[2], desc:r[3], url:r[4], status: i < c.pending ? 'pending' : CYCLE[i % 5] }));
+}
+function metrics(c) {
+  const m = []; let v = c.base * 0.7;
+  for (let i = 0; i < 12; i++) { v *= 1 + 0.03 + (rnd(c.seed, i) - 0.45) * 0.12; m.push(Math.round(v)); }
+  return m;
+}
+
+class Component extends DCLogic {
+  state = {
+    view: ({ Client:'client', Settings:'settings' })[this.props.startView] || 'clients',
+    clientId: 'hp', tab: 'recs', recFilter: 'pending', reportIdx: null, gsTab: 'general',
+    clients: CLIENTS.map(c => ({ ...c, recs: buildRecs(c), autoLow:true, approveBlogs:true, digest:true })),
+    tiers: { Starter:{posts:2,scans:'Monthly',price:'$450'}, Growth:{posts:4,scans:'Fortnightly',price:'$900'}, Pro:{posts:8,scans:'Weekly',price:'$1,800'} },
+    gs: { workspace:'Tango Brown', sender:'Tango Brown SEO', replyTo:'hello@tangobrown.com', signoff:'Thanks,\nThe Tango Brown team' },
+    integrations: [
+      { name:'Google Search Console', letter:'GSC', desc:'Clicks, impressions and keyword rankings', on:true },
+      { name:'Google Analytics 4', letter:'GA', desc:'Traffic, conversions and engagement', on:true },
+      { name:'WordPress', letter:'WP', desc:'Publish posts and apply on-page fixes', on:true },
+      { name:'Shopify', letter:'S', desc:'Product and collection page updates', on:true },
+      { name:'Webflow', letter:'W', desc:'Publish posts and apply on-page fixes', on:false },
+      { name:'Slack', letter:'#', desc:'Get notified when recommendations are ready', on:false },
+      { name:'Gmail', letter:'M', desc:'Draft monthly report emails automatically', on:false },
+    ],
+    notif: { newRecs:true, report:true, weekly:false },
+    search: '', showAdd: false, selected: [], actFilter: 'all', draft: { name:'', domain:'', email:'', tier:'Growth' }, kwDraft: '', toast: null, copied: false,
+  };
+
+  go = (view, extra = {}) => this.setState({ view, reportIdx: null, selected: [], ...extra });
+  client = () => this.state.clients.find(c => c.id === this.state.clientId) || this.state.clients[0];
+  updClient = (id, patch) => this.setState(s => ({ clients: s.clients.map(c => c.id === id ? { ...c, ...(typeof patch === 'function' ? patch(c) : patch) } : c) }));
+  toast = (msg, undo) => { clearTimeout(this._t); this.setState({ toast: { msg, undo } }); this._t = setTimeout(() => this.setState({ toast: null }), 4000); };
+  setRec = (cid, rid, status) => {
+    const prev = this.state.clients.find(c => c.id === cid).recs.find(r => r.id === rid).status;
+    this.updClient(cid, c => ({ recs: c.recs.map(r => r.id === rid ? { ...r, status } : r) }));
+    if (status !== 'pending') this.toast(`Recommendation ${STATUS[status][0].toLowerCase()}`, () => { this.setRec(cid, rid, prev); this.setState({ toast: null }); });
+  };
+  bulkSet = (cid, ids, status) => {
+    if (!ids.length) return;
+    const prev = {}; this.state.clients.find(c => c.id === cid).recs.forEach(r => { if (ids.includes(r.id)) prev[r.id] = r.status; });
+    this.updClient(cid, c => ({ recs: c.recs.map(r => ids.includes(r.id) ? { ...r, status } : r) }));
+    this.setState({ selected: [] });
+    const n = ids.length, pl = n === 1 ? '' : 's';
+    const msg = status === 'approved' ? `${n} change${pl} approved — batch sent to Claude Code` : `${n} recommendation${pl} ${status}`;
+    this.toast(msg, () => { this.updClient(cid, c => ({ recs: c.recs.map(r => prev[r.id] ? { ...r, status: prev[r.id] } : r) })); this.setState({ toast: null }); });
+  };
+  copyText = text => {
+    const fallback = () => { const t = document.createElement('textarea'); t.value = text; t.style.position='fixed'; t.style.opacity='0'; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); } catch (e) {} t.remove(); };
+    try { navigator.clipboard.writeText(text).catch(fallback); } catch (e) { fallback(); }
+    this.setState({ copied: true }); clearTimeout(this._c); this._c = setTimeout(() => this.setState({ copied: false }), 2000);
+    this.toast('Report copied — paste it into an email');
+  };
+  toggleView(on) { return { track: on ? '#2f2e2b' : '#dcdbd7', knob: on ? '14px' : '2px' }; }
+  componentWillUnmount() { clearTimeout(this._t); clearTimeout(this._c); }
+
+  report(c, mi, m) {
+    const s = this.state, tier = s.tiers[c.tier], clicks = m[mi], prev = m[mi - 1];
+    const pct = Math.round((clicks / prev - 1) * 100), mon = FULL[MONTHS[mi]], pmon = FULL[MONTHS[mi - 1]] || MONTHS[mi - 1];
+    const r = i => rnd(c.seed + mi, i), impr = clicks * (34 + c.seed * 3);
+    const pos = (9 + r(1) * 5).toFixed(1), ppos = (+pos + 0.4 + r(2)).toFixed(1);
+    const from = 6 + Math.floor(r(3) * 6), to = Math.max(2, from - 2 - Math.floor(r(4) * 3));
+    const fixes = 6 + Math.floor(r(5) * 14), titles = 3 + Math.floor(r(6) * 6), imgs = 10 + Math.floor(r(7) * 30);
+    const genMonth = MONTHS[(mi + 1) % 12] || 'Oct';
+    const first = c.contact.replace(/^Dr\.\s*/, '').split(' ')[0];
+    const label = `${mon} 2026`;
+    const summary = `In ${mon}, organic search brought ${fmt(clicks)} visitors to ${c.domain}, ${pct >= 0 ? 'up' : 'down'} ${Math.abs(pct)}% on ${pmon}. We published ${tier.posts} new blog posts and completed ${fixes} technical fixes across the site.`;
+    const sections = [
+      { title:'What we did', items:[
+        `Published ${tier.posts} blog posts, including “${c.posts[0]}” and “${c.posts[1]}”`,
+        `Fixed ${fixes} technical issues, including broken links and redirects`,
+        `Rewrote title tags and meta descriptions on ${titles} pages`,
+        `Compressed ${imgs} images to speed up mobile load times`,
+      ]},
+      { title:'How it performed', items:[
+        `Organic clicks: ${fmt(clicks)} (${pct >= 0 ? '+' : ''}${pct}% vs ${pmon})`,
+        `Search impressions: ${fmt(impr)}`,
+        `Average position: ${pos} (improved from ${ppos})`,
+        `“${c.kws[0]}” moved from position ${from} to ${to}`,
+      ]},
+      { title:'Next month', items:[
+        `Publish ${tier.posts} posts targeting “${c.kws[1]}” and “${c.kws[2]}”`,
+        `Improve internal linking to the ${c.service.toLowerCase()} page`,
+      ]},
+    ];
+    const greeting = `Hi ${first},`;
+    const email = [greeting, '', `Here’s your SEO summary for ${label}.`, '', summary, '',
+      ...sections.flatMap(sec => [sec.title, ...sec.items.map(i => '• ' + i), '']), s.gs.signoff].join('\n');
+    return { label, period:`1–${mi === 11 ? 30 : 31} ${mon} 2026`, generated:`1 ${genMonth} 2026`, isNew: mi === 11, greeting, summary, sections, email };
+  }
+
+  renderVals() {
+    const s = this.state, c = this.client(), [avBg, avFg] = AV[(c.seed - 1) % AV.length].split('|');
+    const pendingOf = cl => cl.recs.filter(r => r.status === 'pending').length;
+    const totalPending = s.clients.reduce((a, cl) => a + pendingOf(cl), 0);
+    const av = cl => AV[(cl.seed - 1) % AV.length].split('|');
+
+    const sideClients = s.clients.map(cl => ({ name: cl.name, initials: initials(cl.name), avBg: av(cl)[0], avFg: av(cl)[1], pending: pendingOf(cl), hasPending: pendingOf(cl) > 0,
+      bg: s.view === 'client' && cl.id === c.id ? '#efeeeb' : 'transparent', onClick: () => this.go('client', { clientId: cl.id, tab: 'recs', recFilter: 'pending' }) }));
+
+    const q = s.search.trim().toLowerCase();
+    const clientRows = s.clients.filter(cl => !q || (cl.name + cl.domain).toLowerCase().includes(q)).map(cl => {
+      const m = cl.isNew ? null : metrics(cl), p = pendingOf(cl), d = m ? Math.round((m[11] / m[10] - 1) * 100) : 0;
+      return { name: cl.name, domain: cl.domain, initials: initials(cl.name), avBg: av(cl)[0], avFg: av(cl)[1], tier: cl.tier, tierBg: TAG[TIER_C[cl.tier]][0], tierFg: TAG[TIER_C[cl.tier]][1],
+        hasPending: p > 0, noPending: p === 0, pendingLabel: cl.isNew ? 'Scanning site…' : p > 0 ? `${p} pending` : 'All reviewed',
+        lastReport: cl.isNew ? '—' : '1 Oct 2026', clicks: m ? fmt(m[11]) : '—', delta: m ? `${d >= 0 ? '↑' : '↓'} ${Math.abs(d)}%` : '', deltaColor: d >= 0 ? '#2a6b45' : '#a23b2c',
+        onClick: () => this.go('client', { clientId: cl.id, tab: 'recs', recFilter: 'pending' }) };
+    });
+
+    const tabName = { recs:'Recommendations', actioned:'Actioned', reports:'Reports', settings:'Settings' };
+    const crumbs = s.view === 'clients' ? [{ label:'Clients' }] : s.view === 'settings' ? [{ label:'Settings' }]
+      : [{ label:'Clients', onClick: () => this.go('clients') }, { label:c.name, onClick: () => this.go('client', { tab:'recs' }) }, { label: tabName[s.tab], onClick: () => this.setState({ reportIdx:null }) }];
+    const crumbsOut = crumbs.map((cr, i) => ({ ...cr, notFirst: i > 0, color: i === crumbs.length - 1 ? '#2f2e2b' : '#7d7b76', onClick: cr.onClick || (() => {}) }));
+
+    const pend = pendingOf(c), tier = s.tiers[c.tier];
+    const clientTabs = [['recs','Recommendations',pend],['actioned','Actioned',0],['reports','Reports',0],['settings','Settings',0]].map(([k, l, n]) => ({ label:l, count:n, hasCount:n > 0,
+      color: s.tab === k ? '#2f2e2b' : '#9a9893', bd: s.tab === k ? '#2f2e2b' : 'transparent', onClick: () => this.setState({ tab:k, reportIdx:null, selected:[] }) }));
+
+    const pendingRecs = c.recs.filter(r => r.status === 'pending'), done = c.recs.filter(r => r.status !== 'pending');
+    const sel = s.selected.filter(id => pendingRecs.some(r => r.id === id));
+    const deco = r => ({ ...r, catBg: TAG[CAT[r.cat]][0], catFg: TAG[CAT[r.cat]][1], impBg: TAG[IMPACT[r.impact]][0], impFg: TAG[IMPACT[r.impact]][1], statusLabel: STATUS[r.status][0], stBg: TAG[STATUS[r.status][1]][0], stFg: TAG[STATUS[r.status][1]][1] });
+    const box = (on, mark) => ({ cbBg: on ? '#2f2e2b' : '#fff', cbBd: on ? '#2f2e2b' : '#cfcdc8', check: on ? (mark || '✓') : '' });
+    const recs = pendingRecs.map(r => { const on = sel.includes(r.id); return { ...deco(r), ...box(on), rowBg: on ? '#f8f7f5' : 'transparent',
+      onToggle: () => this.setState(st => ({ selected: on ? st.selected.filter(x => x !== r.id) : [...st.selected, r.id] })) }; });
+    const allOn = sel.length > 0 && sel.length === pendingRecs.length;
+    const actFilters = ['all','approved','deferred','declined'].map(k => { const on = s.actFilter === k; return { label: k === 'all' ? 'All' : STATUS[k][0], count: k === 'all' ? done.length : done.filter(r => r.status === k).length,
+      bg: on ? '#2f2e2b' : '#fff', fg: on ? '#fff' : '#5f5d58', bd: on ? '#2f2e2b' : '#e3e2de', onClick: () => this.setState({ actFilter:k }) }; });
+    const actioned = done.filter(r => s.actFilter === 'all' || r.status === s.actFilter).map(r => ({ ...deco(r), onUndo: () => this.setRec(c.id, r.id, 'pending') }));
+    const recsEmptyText = c.isNew ? 'First site scan in progress — recommendations will appear here shortly.' : 'All caught up. New recommendations arrive after the next site scan.';
+
+    let reportVals = { kpis:[], bars:[], topPages:[], topKws:[], reportList:[], rep:{ sections:[] } };
+    if (!c.isNew) {
+      const m = metrics(c), cur = m[11], prv = m[10], r = i => rnd(c.seed, 50 + i);
+      const impr = cur * (34 + c.seed * 3), pimpr = prv * (33 + c.seed * 3), pos = 9 + r(1) * 5, ctr = cur / impr * 100, pctr = prv / pimpr * 100;
+      const dl = (a, b, inv) => { const d = (a / b - 1) * 100, good = inv ? d < 0 : d >= 0; return { delta: `${d >= 0 ? '↑' : '↓'} ${Math.abs(d).toFixed(1)}%`, color: good ? '#2a6b45' : '#a23b2c' }; };
+      const max = Math.max(...m);
+      const reps = [11, 10, 9].map(mi => this.report(c, mi, m));
+      reportVals = {
+        kpis: [{ label:'Organic clicks', value: fmt(cur), ...dl(cur, prv) }, { label:'Impressions', value: fmt(impr), ...dl(impr, pimpr) },
+          { label:'Avg. position', value: pos.toFixed(1), ...dl(pos, pos + 0.6, true) }, { label:'Click-through rate', value: ctr.toFixed(1) + '%', ...dl(ctr, pctr) }],
+        bars: m.map((v, i) => ({ h: Math.round(v / max * 100) + '%', bg: i === 11 ? '#2f2e2b' : '#dcdbd7', label: MONTHS[i], tip: `${MONTHS[i]}: ${fmt(v)} clicks` })),
+        topPages: c.pages.map((p, i) => ({ path: p, clicks: fmt(cur * [0.34, 0.18, 0.12, 0.08, 0.05][i]) })),
+        topKws: c.kws.map((k, i) => { const ch = Math.round((r(10 + i) - 0.3) * 6); return { kw: k, pos: Math.max(1, Math.round(2 + i * 2.4 + r(20 + i) * 3)), chg: ch === 0 ? '–' : (ch > 0 ? '↑' : '↓') + Math.abs(ch), color: ch > 0 ? '#2a6b45' : ch < 0 ? '#a23b2c' : '#a5a39e' }; }),
+        reportList: reps.map((rp, i) => ({ label: rp.label, generated: rp.generated, isNew: rp.isNew, onClick: () => this.setState({ reportIdx: i }) })),
+        rep: s.reportIdx != null ? reps[s.reportIdx] : reps[0],
+        latestLabel: reps[0].label,
+      };
+    }
+
+    const fieldDefs = [['Website','domain'],['Primary contact','contact'],['Contact email','email'],['Industry','industry'],['Location','location'],['CMS','cms']];
+    const fields = fieldDefs.map(([label, key]) => ({ label, value: c[key] || '', onChange: e => this.updClient(c.id, { [key]: e.target.value }) }));
+    const tierCards = ['Starter','Growth','Pro'].map(t => ({ name:t, ...s.tiers[t], bd: c.tier === t ? '#2f2e2b' : '#ebeae6', ring: c.tier === t ? '#2f2e2b' : 'transparent',
+      onClick: () => { if (c.tier !== t) { this.updClient(c.id, { tier:t }); this.toast(`${c.name} moved to ${t}`); } } }));
+    const clientToggles = [['autoLow','Auto-approve low-impact fixes','Alt text, schema and image compression go live without review'],
+      ['approveBlogs','Review blog posts before publishing','Drafts appear in Recommendations first'],
+      ['digest','Include in monthly report','Generate a summary for this client on the 1st']].map(([k, label, desc]) => ({ label, desc, ...this.toggleView(c[k]), onClick: () => this.updClient(c.id, { [k]: !c[k] }) }));
+
+    const gsTabs = [['general','General'],['tiers','Tiers'],['integrations','Integrations'],['notifications','Notifications']].map(([k, l]) => ({ label:l,
+      color: s.gsTab === k ? '#2f2e2b' : '#9a9893', bd: s.gsTab === k ? '#2f2e2b' : 'transparent', onClick: () => this.setState({ gsTab:k }) }));
+    const setGs = k => e => { const v = e.target.value; this.setState(st => ({ gs: { ...st.gs, [k]: v } })); };
+    const setTier = (t, k, num) => e => { const v = num ? Math.max(0, +e.target.value || 0) : e.target.value; this.setState(st => ({ tiers: { ...st.tiers, [t]: { ...st.tiers[t], [k]: v } } })); };
+    const nOn = s.clients.length;
+
+    const d = s.draft, setD = k => e => { const v = e.target.value; this.setState(st => ({ draft: { ...st.draft, [k]: v } })); };
+    const canCreate = d.name.trim() && d.domain.trim();
+
+    return {
+      workspaceName: s.gs.workspace, clientCount: nOn, goClients: () => this.go('clients'), goSettings: () => this.go('settings'),
+      navClientsBg: s.view === 'clients' ? '#efeeeb' : 'transparent', navSettingsBg: s.view === 'settings' ? '#efeeeb' : 'transparent',
+      sideClients, crumbs: crumbsOut,
+      isClients: s.view === 'clients', isClient: s.view === 'client', isSettings: s.view === 'settings',
+      dashSubtitle: `${nOn} clients · ${totalPending} recommendations awaiting review`,
+      search: s.search, onSearch: e => this.setState({ search: e.target.value }), clientRows, noResults: clientRows.length === 0,
+      cl: { ...c, initials: initials(c.name), avBg, avFg, tierBg: TAG[TIER_C[c.tier]][0], tierFg: TAG[TIER_C[c.tier]][1], tierInfo: `${tier.posts} posts / month · ${tier.scans.toLowerCase()} scans` },
+      clientTabs, isRecs: s.tab === 'recs', isActioned: s.tab === 'actioned', isReports: s.tab === 'reports', isClientSettings: s.tab === 'settings',
+      recs, recsEmpty: recs.length === 0, recsEmptyText, actFilters, actioned, actEmpty: actioned.length === 0,
+      allBox: box(sel.length > 0, allOn ? '✓' : '–'), toggleAll: () => this.setState({ selected: allOn ? [] : pendingRecs.map(r => r.id) }),
+      selLabel: sel.length ? `${sel.length} of ${pendingRecs.length} selected` : `${pendingRecs.length} outstanding`,
+      bulkOpacity: sel.length ? 1 : 0.4, bulkPE: sel.length ? 'auto' : 'none', approveLabel: sel.length ? `Approve ${sel.length}` : 'Approve',
+      bulkApprove: () => this.bulkSet(c.id, sel, 'approved'), bulkDefer: () => this.bulkSet(c.id, sel, 'deferred'), bulkDecline: () => this.bulkSet(c.id, sel, 'declined'),
+      showDesc: this.props.recLayout !== 'Compact',
+      reportsEmpty: !!c.isNew, showOverview: !c.isNew && s.reportIdx == null, showReport: !c.isNew && s.reportIdx != null,
+      hasNewReport: !c.isNew, openLatest: () => this.setState({ reportIdx: 0 }), closeReport: () => this.setState({ reportIdx: null }),
+      ...reportVals,
+      copyReport: () => this.copyText(reportVals.rep.email), copyLabel: s.copied ? 'Copied' : 'Copy for email', signoff: s.gs.signoff,
+      tierCards, fields, clientToggles,
+      kwChips: c.kws.map(k => ({ kw:k, onRemove: () => this.updClient(c.id, cc => ({ kws: cc.kws.filter(x => x !== k) })) })),
+      kwDraft: s.kwDraft, onKwDraft: e => this.setState({ kwDraft: e.target.value }),
+      onKwKey: e => { const v = s.kwDraft.trim(); if (e.key === 'Enter' && v) { this.updClient(c.id, cc => ({ kws: cc.kws.includes(v) ? cc.kws : [...cc.kws, v] })); this.setState({ kwDraft:'' }); } },
+      archiveClient: () => { const name = c.name; this.setState(st => ({ clients: st.clients.filter(x => x.id !== c.id), view:'clients' })); this.toast(`${name} archived`); },
+      gsTabs, gsGeneral: s.gsTab === 'general', gsTiers: s.gsTab === 'tiers', gsIntegrations: s.gsTab === 'integrations', gsNotifications: s.gsTab === 'notifications',
+      gsFields: [['Workspace name','workspace'],['Report sender name','sender'],['Reply-to email','replyTo']].map(([label, k]) => ({ label, value: s.gs[k], onChange: setGs(k) })),
+      onSignoff: setGs('signoff'),
+      tierRows: ['Starter','Growth','Pro'].map(t => { const n = s.clients.filter(x => x.tier === t).length; return { name:t, clients: `${n} client${n === 1 ? '' : 's'}`, ...s.tiers[t], onPosts: setTier(t, 'posts', true), onScans: setTier(t, 'scans'), onPrice: setTier(t, 'price') }; }),
+      integrations: s.integrations.map((ig, i) => ({ ...ig, btn: ig.on ? 'Connected' : 'Connect', bg: ig.on ? '#fff' : '#2f2e2b', fg: ig.on ? '#2a6b45' : '#fff', bd: ig.on ? '#e3e2de' : '#2f2e2b',
+        onClick: () => this.setState(st => ({ integrations: st.integrations.map((x, j) => j === i ? { ...x, on: !x.on } : x) })) })),
+      notifToggles: [['newRecs','New recommendations','Email me when a site scan finds new recommendations'],['report','Monthly reports ready','Email me on the 1st when reports are generated'],['weekly','Weekly digest','A Monday summary of pending work across all clients']]
+        .map(([k, label, desc]) => ({ label, desc, ...this.toggleView(s.notif[k]), onClick: () => this.setState(st => ({ notif: { ...st.notif, [k]: !st.notif[k] } })) })),
+      showAdd: s.showAdd, openAdd: () => this.setState({ showAdd: true, draft: { name:'', domain:'', email:'', tier:'Growth' } }), closeAdd: () => this.setState({ showAdd: false }), stop: e => e.stopPropagation(),
+      addFields: [['Client name','name','Acme Plumbing'],['Website','domain','acmeplumbing.com'],['Contact email','email','owner@acmeplumbing.com']].map(([label, k, ph]) => ({ label, ph, value: d[k], onChange: setD(k) })),
+      addTiers: ['Starter','Growth','Pro'].map(t => ({ name:t, bd: d.tier === t ? '#2f2e2b' : '#e3e2de', bg: d.tier === t ? '#2f2e2b' : '#fff', fg: d.tier === t ? '#fff' : '#5f5d58', onClick: () => this.setState(st => ({ draft: { ...st.draft, tier:t } })) })),
+      createBg: canCreate ? '#2f2e2b' : '#b9b7b2',
+      createClient: () => { if (!canCreate) return; const id = 'c' + Date.now(), seed = 6 + s.clients.length;
+        const nc = { id, name:d.name.trim(), domain:d.domain.trim().replace(/^https?:\/\//,''), tier:d.tier, contact:'', email:d.email, industry:'', location:'', cms:'', base:500, seed, pending:0, service:'', oldPost:'', kws:[], pages:[], posts:[], recs:[], isNew:true, autoLow:true, approveBlogs:true, digest:true };
+        this.setState(st => ({ clients: [...st.clients, nc], showAdd:false, view:'client', clientId:id, tab:'recs', recFilter:'pending', reportIdx:null })); this.toast(`${nc.name} added — first scan started`); },
+      hasToast: !!s.toast, toastMsg: s.toast ? s.toast.msg : '', toastHasUndo: !!(s.toast && s.toast.undo), toastUndo: () => s.toast && s.toast.undo && s.toast.undo(),
+    };
+  }
+}
+</script>
+</body>
+</html>

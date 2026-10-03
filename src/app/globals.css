@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --color-ink: #2f2e2b;
+  --color-ink-hover: #000;
+  --color-ink-2: #45433f;
+  --color-ink-3: #5f5d58;
+  --color-muted: #7d7b76;
+  --color-subtle: #9a9893;
+  --color-subtle-2: #a5a39e;
+  --color-faint: #cfcdc8;
+  --color-line: #ebeae6;
+  --color-control: #e3e2de;
+  --color-sidebar: #f8f7f5;
+  --color-hover: #f3f2ef;
+  --color-hover-2: #efeeeb;
+  --color-row-hover: #fbfbfa;
+  --color-banner-hover: #f1f0ec;
+  --color-toggle-off: #dcdbd7;
+  --color-disabled: #b9b7b2;
+  --color-positive: #2a6b45;
+  --color-negative: #a23b2c;
+  --color-alert: #d4574a;
+
+  --color-tag-gray: #efeeeb;
+  --color-tag-gray-fg: #5f5d58;
+  --color-tag-green: #e4f1e8;
+  --color-tag-green-fg: #2a6b45;
+  --color-tag-red: #fbe8e5;
+  --color-tag-red-fg: #a23b2c;
+  --color-tag-yellow: #faf0d9;
+  --color-tag-yellow-fg: #8a6116;
+  --color-tag-blue: #e4edfa;
+  --color-tag-blue-fg: #2a5ca8;
+  --color-tag-purple: #eee8f6;
+  --color-tag-purple-fg: #6a4a9c;
+  --color-tag-orange: #fbeadb;
+  --color-tag-orange-fg: #9a5420;
+
+  --shadow-modal: 0 12px 40px rgba(0, 0, 0, 0.18);
+  --shadow-toast: 0 6px 20px rgba(0, 0, 0, 0.18);
+  --shadow-knob: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+@layer base {
+  html,
+  body {
+    background: #fff;
+    color: var(--color-ink);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+  /* Stop iOS zooming on focus: 16px inputs below md. */
+  @media (max-width: 767px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: default;
+  }
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility transition-quiet {
+  transition-property: background-color, color, border-color;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
+}
+
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@utility text-pretty {
+  text-wrap: pretty;
+}
