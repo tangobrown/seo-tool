@@ -51,7 +51,7 @@ Checks: `pnpm lint`, `pnpm typecheck`, `pnpm test` (the approval test needs `DAT
 ## Deploying (Vercel + Neon + Inngest)
 
 1. Create a Neon project. Use the pooled string for `DATABASE_URL` and the direct one for `DATABASE_URL_UNPOOLED`.
-2. Create a Vercel project (Pro plan, for longer function durations) from this repo. Set the build command to `pnpm vercel-build` so migrations run before each build.
+2. Create a Vercel project (Pro plan, for longer function durations) from this repo. `vercel.json` sets the build command to `pnpm vercel-build`, which runs migrations against `DATABASE_URL_UNPOOLED` before each build. The migrations also create the workspace row, the default tiers and the integration rows, so a fresh database works without seeding.
 3. Add the Inngest integration from the Vercel marketplace. It sets `INNGEST_EVENT_KEY` and `INNGEST_SIGNING_KEY`, and the app serves functions at `/api/inngest`.
 4. Set the remaining environment variables from `.env.example`. For the login, set `ADMIN_EMAIL` and `ADMIN_PASSWORD` (or, optionally, `ADMIN_PASSWORD_HASH` from `pnpm hash-password`, pasted without the `\$` escaping).
 5. Seed once if you want the demo data: `DATABASE_URL_UNPOOLED=… pnpm db:seed`. Skip this for a clean start; the workspace row and tiers can be created by running the seed and deleting the demo clients.
