@@ -20,6 +20,7 @@ import {
   updateClientField,
   type ClientField,
 } from "@/server/actions/clients";
+import { listSiteguruSites, syncSiteguruNow } from "@/server/actions/integrations";
 
 type ClientData = {
   id: string;
@@ -333,6 +334,19 @@ function Connections({ clientId, connections }: { clientId: string; connections:
   const [draft, setDraft] = useState("");
   const [pending, start] = useTransition();
   const [now] = useState(() => new Date());
+  const [sgSites, setSgSites] = useState<{ domain: string; searchConsole: boolean | null }[] | null | "loading">(null);
+
+  function openEditor(provider: string, current: string | null) {
+    setDraft(current ?? "");
+    if (editing === provider) return setEditing(null);
+    setEditing(provider);
+    if (provider === "siteguru") {
+      setSgSites("loading");
+      listSiteguruSites()
+        .then((r) => setSgSites(r.ok ? r.sites : null))
+        .catch(() => setSgSites(null));
+    }
+  }
 
   return (
     <div>
@@ -350,6 +364,21 @@ function Connections({ clientId, connections }: { clientId: string; connections:
                 {conn?.lastSuccessAt ? ` · synced ${relativeTime(conn.lastSuccessAt, now)}` : ""}
               </div>
               {conn?.lastError && conn.status !== "connected" && <div className="text-[13px] text-negative">{conn.lastError}</div>}
+              {row.provider === "siteguru" && conn?.externalId && conn.status === "connected" && (
+                <button
+                  type="button"
+                  disabled={pending}
+                  className="min-h-9 text-[13px] font-medium hover:underline md:min-h-0"
+                  onClick={() =>
+                    start(async () => {
+                      const r = await syncSiteguruNow(clientId);
+                      toast({ message: r.ok ? "Syncing with SiteGuru — this takes a few seconds" : r.error });
+                    })
+                  }
+                >
+                  Sync now
+                </button>
+              )}
               {editing === row.provider && (
                 <form
                   className="mt-2 flex gap-2"
@@ -365,14 +394,34 @@ function Connections({ clientId, connections }: { clientId: string; connections:
                     });
                   }}
                 >
-                  <input
-                    className={fieldInputClass}
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    placeholder={row.provider === "github" ? "owner/name" : row.provider === "siteguru" ? "example.co.uk" : "locations/123…"}
-                    autoFocus
-                    autoCapitalize="none"
-                  />
+                  {row.provider === "siteguru" && Array.isArray(sgSites) && sgSites.length > 0 ? (
+                    <select className={fieldInputClass} value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus>
+                      <option value="">Choose a SiteGuru site…</option>
+                      {sgSites.map((site) => (
+                        <option key={site.domain} value={site.domain}>
+                          {site.domain}
+                          {site.searchConsole === false ? " (no Search Console)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      className={fieldInputClass}
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      placeholder={
+                        row.provider === "github"
+                          ? "owner/name"
+                          : row.provider === "siteguru"
+                            ? sgSites === "loading"
+                              ? "Loading SiteGuru sites…"
+                              : "www.example.co.uk"
+                            : "locations/123…"
+                      }
+                      autoFocus
+                      autoCapitalize="none"
+                    />
+                  )}
                   <Button type="submit" disabled={pending || !draft.trim()} className="min-h-11 md:min-h-0">
                     Save
                   </Button>
@@ -387,15 +436,20 @@ function Connections({ clientId, connections }: { clientId: string; connections:
                   className="min-h-11 md:min-h-0"
                   disabled={pending}
                   onClick={() => {
-                    if (actionLabel === "Retry") {
+                    if (actionLabel === "Retry" && row.provider === "siteguru" && conn?.externalId) {
+                      start(async () => {
+                        const r = await syncSiteguruNow(clientId);
+                        toast({ message: r.ok ? "Syncing with SiteGuru — this takes a few seconds" : r.error });
+                        router.refresh();
+                      });
+                    } else if (actionLabel === "Retry") {
                       start(async () => {
                         const r = await retryOnboarding(clientId);
                         toast({ message: r.ok ? "Checking connections again" : r.error });
                         router.refresh();
                       });
                     } else {
-                      setDraft(conn?.externalId ?? "");
-                      setEditing(editing === row.provider ? null : row.provider);
+                      openEditor(row.provider, conn?.externalId ?? null);
                     }
                   }}
                 >
@@ -407,7 +461,7 @@ function Connections({ clientId, connections }: { clientId: string; connections:
         );
       })}
       <p className="mt-2 text-[12px] text-subtle-2">
-        Google Business Profile locations come from the connected Google account (Settings → Integrations). The location picker arrives with the GBP integration.
+        SiteGuru sites come from your SiteGuru key (Settings → Integrations) and sync daily at 05:00. Google Business Profile locations arrive with the GBP integration.
       </p>
     </div>
   );

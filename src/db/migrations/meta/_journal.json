@@ -15,6 +15,13 @@
       "when": 1791041637744,
       "tag": "0001_bootstrap_defaults",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791115625171,
+      "tag": "0002_month_snapshot_unique",
+      "breakpoints": true
     }
   ]
 }

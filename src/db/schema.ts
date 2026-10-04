@@ -455,7 +455,11 @@ export const metricSnapshots = pgTable(
     metrics: jsonb("metrics").$type<SiteMetrics>().notNull(),
     capturedAt: ts("captured_at").notNull().defaultNow(),
   },
-  (t) => [index("metric_snapshots_client_idx").on(t.clientId, t.source, t.capturedAt)],
+  (t) => [
+    index("metric_snapshots_client_idx").on(t.clientId, t.source, t.capturedAt),
+    // One snapshot per calendar month per source; rolling30 rows accumulate (one per sync day).
+    uniqueIndex("metric_snapshots_month_uq").on(t.clientId, t.source, t.kind, t.periodStart).where(sql`kind = 'month'`),
+  ],
 );
 
 export const serpSnapshots = pgTable(

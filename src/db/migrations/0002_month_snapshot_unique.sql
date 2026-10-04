@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "metric_snapshots_month_uq" ON "metric_snapshots" USING btree ("client_id","source","kind","period_start") WHERE kind = 'month';

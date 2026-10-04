@@ -7,6 +7,7 @@ import { TiersSettings } from "@/components/settings/TiersSettings";
 import { Tabs } from "@/components/ui/Tabs";
 import { PropertyRow } from "@/components/ui/PropertyRow";
 import { githubConfigured, githubInstallUrl } from "@/integrations/github";
+import { keySource } from "@/integrations/keys";
 import {
   getAllClientsBrief,
   getAuditLog,
@@ -80,16 +81,18 @@ export default async function SettingsPage({
       </div>
     );
   } else if (tab === "integrations") {
-    const rows = await getIntegrations();
+    const [rows, siteguruKey, anthropicKey] = await Promise.all([getIntegrations(), keySource("siteguru"), keySource("anthropic")]);
     body = (
       <IntegrationsSettings
+        keys={{ siteguru: siteguruKey, anthropic: anthropicKey }}
+        canStoreKeys={!!process.env.ENCRYPTION_KEY}
         githubInstallUrl={githubInstallUrl()}
         githubConfigured={githubConfigured()}
         env={{
-          anthropic: !!process.env.ANTHROPIC_API_KEY,
+          anthropic: !!anthropicKey,
           serp: !!(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD),
           google: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
-          siteguru: !!process.env.SITEGURU_API_KEY,
+          siteguru: !!siteguruKey,
           slack: !!ws.slackWebhookUrlEnc,
         }}
         rows={rows.map((r) => ({

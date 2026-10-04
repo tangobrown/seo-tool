@@ -211,10 +211,15 @@ export async function setClientConnection(clientId: string, provider: "siteguru"
   await db.update(clients).set({ [col[provider]]: externalId }).where(eq(clients.id, clientId));
   await db
     .update(clientConnections)
-    .set({ externalId, status: "connected", lastSuccessAt: new Date(), lastError: null })
+    // SiteGuru is "pending" until the first sync succeeds; the others are confirmed by the operator choosing them.
+    .set(provider === "siteguru" ? { externalId, status: "pending", lastError: null } : { externalId, status: "connected", lastSuccessAt: new Date(), lastError: null })
     .where(and(eq(clientConnections.clientId, clientId), eq(clientConnections.provider, provider)));
   await audit({ actor: "operator", clientId, entityType: "client_connection", entityId: provider, event: "connection.set", after: { provider, externalId } });
-  if (provider === "siteguru") await resolveAttention(`siteguru_missing:${clientId}`);
+  if (provider === "siteguru") {
+    await resolveAttention(`siteguru_missing:${clientId}`);
+    // Pull data for the newly linked site straight away rather than waiting for 05:00.
+    await inngest.send({ name: EVENTS.siteguruSyncClient, data: { clientId }, id: `sg-link-${clientId}-${Date.now()}` }).catch((e) => console.error(e));
+  }
   if (provider === "gbp") await resolveAttention(`gbp_match:${clientId}`);
   revalidatePath(`/clients/${clientId}`, "layout");
   return { ok: true };

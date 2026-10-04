@@ -8,10 +8,13 @@ import { anthropicConfigured, llmJson } from "@/integrations/anthropic";
 import { classifyPrompt, DISCOVERY_PROMPT_VERSION, DISCOVERY_SYSTEM, discoveryPrompt, discoverySchema, pageTypeSchema } from "@/integrations/anthropic/prompts/discovery";
 import { github, githubConfigured } from "@/integrations/github";
 import { CLIENT_REPO_TEMPLATES } from "@/integrations/github/templates.generated";
+import { siteguru, siteguruConfigured } from "@/integrations/siteguru";
+import { matchSite } from "@/integrations/siteguru/map";
 import { notify, appLink } from "@/integrations/slack";
 import { finishRun, startRun } from "@/integrations/run";
 import { checkWebsite, crawlSite } from "@/integrations/website";
 import { audit } from "@/lib/audit";
+import { syncClientFromSiteguru } from "@/server/siteguru-sync";
 import { raiseAttention, resolveAttention } from "@/lib/attention";
 import { EVENTS, inngest } from "./client";
 import { onJobFailure } from "./failure";
@@ -161,20 +164,34 @@ export const clientOnboard = inngest.createFunction(
       }),
     );
 
-    // 4. SiteGuru match: access method is confirmed in Phase 3 (§9.2), so this is recorded, not guessed.
+    // 4. SiteGuru match (§9.1): exact domain match against the sites the key can see.
     await step.run("siteguru", () =>
       recorded(clientId, "siteguru", async () => {
         const c = await loadClient(clientId);
-        await setConnection(clientId, "siteguru", { status: "not_connected", lastError: "SiteGuru provider arrives in Phase 3" });
-        await raiseAttention({
-          dedupeKey: `siteguru_missing:${clientId}`,
-          kind: "integration",
-          clientId,
-          title: `Connect ${c.domain} to SiteGuru`,
-          detail: "Make sure the site is in SiteGuru. Automatic matching arrives with the SiteGuru integration; you can set the site in the client’s Connections now.",
-          link: `/clients/${clientId}/settings`,
-        });
-        return { status: "skipped", message: "SiteGuru integration not built yet (Phase 3)" };
+        if (c.siteguruSiteId) return { status: "ok", message: `Linked to ${c.siteguruSiteId}` };
+        if (!(await siteguruConfigured())) {
+          await setConnection(clientId, "siteguru", { status: "not_connected", lastError: "No SiteGuru API key" });
+          await raiseAttention({ dedupeKey: "siteguru_key_missing", kind: "integration", title: "Add your SiteGuru API key", detail: "Create a key on SiteGuru’s API access page and paste it in Settings → Integrations.", link: "/settings/integrations" });
+          return { status: "skipped", message: "No SiteGuru API key yet" };
+        }
+        const site = matchSite(await siteguru.listSites(), c.domain);
+        if (!site) {
+          await setConnection(clientId, "siteguru", { status: "not_found", lastFailureAt: new Date(), lastError: `No SiteGuru site for ${c.domain}` });
+          await raiseAttention({
+            dedupeKey: `siteguru_missing:${clientId}`,
+            kind: "integration",
+            clientId,
+            title: `Add ${c.domain} to SiteGuru`,
+            detail: "No SiteGuru site matches this domain. Add it in SiteGuru, then choose it in the client’s Connections.",
+            link: `/clients/${clientId}/settings`,
+          });
+          return { status: "failed", message: `No SiteGuru site matches ${c.domain}` };
+        }
+        await db.update(clients).set({ siteguruSiteId: site.domain }).where(eq(clients.id, clientId));
+        await setConnection(clientId, "siteguru", { status: "connected", externalId: site.domain, lastError: null });
+        await resolveAttention(`siteguru_missing:${clientId}`);
+        const gsc = site.data_sources?.search_console?.connected;
+        return { status: "ok", message: `Matched ${site.domain}${gsc === false ? " (Search Console not connected in SiteGuru)" : ""}` };
       }),
     );
 
@@ -232,9 +249,9 @@ export const clientOnboard = inngest.createFunction(
     await step.run("discovery", () =>
       recorded(clientId, "discovery", async () => {
         if (crawl.status !== "ok") return { status: "skipped", message: "No page inventory" };
-        if (!anthropicConfigured()) {
-          await raiseAttention({ dedupeKey: "anthropic_missing", kind: "integration", title: "Add the Anthropic API key", detail: "Discovery and classification need ANTHROPIC_API_KEY.", link: "/settings/integrations" });
-          return { status: "failed", message: "ANTHROPIC_API_KEY not set — add services and locations by hand" };
+        if (!(await anthropicConfigured())) {
+          await raiseAttention({ dedupeKey: "anthropic_missing", kind: "integration", title: "Add the Anthropic API key", detail: "Discovery and classification need an Anthropic API key. Paste it in Settings → Integrations.", link: "/settings/integrations" });
+          return { status: "failed", message: "No Anthropic API key — add services and locations by hand" };
         }
         const c = await loadClient(clientId);
         const inv = await db.select({ path: pages.path, title: pages.title, h1: pages.h1 }).from(pages).where(eq(pages.clientId, clientId));
@@ -274,8 +291,13 @@ export const clientOnboard = inngest.createFunction(
       }),
     );
 
-    // 8. First SiteGuru sync: Phase 3.
-    await step.run("siteguru-sync", () => recorded(clientId, "siteguru_sync", async () => ({ status: "skipped", message: "Arrives with the SiteGuru integration (Phase 3)" })));
+    // 8. First SiteGuru sync.
+    await step.run("siteguru-sync", () =>
+      recorded(clientId, "siteguru_sync", async () => {
+        const out = await syncClientFromSiteguru(clientId);
+        return { status: out.status === "synced" ? "ok" : "skipped", message: out.message };
+      }),
+    );
 
     // 9. Awaiting confirmation
     await step.run("await-confirmation", async () => {

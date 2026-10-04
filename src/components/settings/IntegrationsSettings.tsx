@@ -1,9 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { Button } from "@/components/ui/Button";
 import { cx } from "@/components/ui/cx";
+import { fieldInputClass } from "@/components/ui/Modal";
+import { useToast } from "@/components/ui/Toast";
 import { formatDateTime } from "@/lib/format";
+import { saveIntegrationKey, testIntegration } from "@/server/actions/integrations";
+
+type KeySource = "app" | "env" | null;
 
 type Row = { provider: string; status: string; lastSuccessAt: string | null; lastFailureAt: string | null; lastError: string | null; account: string | null };
 
@@ -21,8 +28,12 @@ export function IntegrationsSettings({
   githubInstallUrl,
   githubConfigured,
   env,
+  keys,
+  canStoreKeys,
 }: {
   rows: Row[];
+  keys: { siteguru: KeySource; anthropic: KeySource };
+  canStoreKeys: boolean;
   githubInstallUrl: string | null;
   githubConfigured: boolean;
   env: { anthropic: boolean; serp: boolean; google: boolean; siteguru: boolean; slack: boolean };
@@ -54,11 +65,15 @@ export function IntegrationsSettings({
               {env.slack ? "Change webhook" : "Add webhook"}
             </Link>
           );
-        } else {
-          const envName = { siteguru: "SITEGURU_API_KEY", serp: "DATAFORSEO_LOGIN / PASSWORD", anthropic: "ANTHROPIC_API_KEY" }[p.key];
-          action = <span className="text-[12px] text-subtle-2">API key: {envName}</span>;
+        } else if (p.key === "serp") {
+          action = <span className="text-[12px] text-subtle-2">DataForSEO arrives in Phase 7</span>;
         }
-        return <IntegrationRow key={p.key} p={p} status={status} r={r} action={action} />;
+        const keyed = p.key === "siteguru" || p.key === "anthropic" ? p.key : null;
+        return (
+          <IntegrationRow key={p.key} p={p} status={status} r={r} action={action}>
+            {keyed && <KeyEditor provider={keyed} source={keys[keyed]} canStore={canStoreKeys} />}
+          </IntegrationRow>
+        );
       })}
       <div className="flex items-center gap-3 border-b border-line py-3.5 opacity-50">
         <Logo letter="M" />
@@ -81,11 +96,13 @@ function IntegrationRow({
   status,
   r,
   action,
+  children,
 }: {
   p: { name: string; letter: string; desc: string };
   status: string;
   r: Row | undefined;
   action: React.ReactNode;
+  children?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const label = status === "connected" ? "Connected" : status === "error" ? "Error" : "Not connected";
@@ -109,10 +126,104 @@ function IntegrationRow({
             </button>
           )}
           {open && r?.lastError && <pre className="mt-1 whitespace-pre-wrap break-all rounded bg-sidebar p-2 text-[12px] text-ink-3">{r.lastError}</pre>}
+          {children}
         </div>
         <div className="hidden shrink-0 md:block">{action}</div>
       </div>
       <div className="ml-11 mt-1 md:hidden">{action}</div>
+    </div>
+  );
+}
+
+const KEY_HELP = {
+  siteguru: { label: "SiteGuru API key", where: "SiteGuru → API access → create a key (needs a plan with MCP access).", env: "SITEGURU_API_KEY" },
+  anthropic: { label: "Anthropic API key", where: "console.anthropic.com → API keys.", env: "ANTHROPIC_API_KEY" },
+} as const;
+
+function KeyEditor({ provider, source, canStore }: { provider: "siteguru" | "anthropic"; source: KeySource; canStore: boolean }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState("");
+  const [pending, start] = useTransition();
+  const help = KEY_HELP[provider];
+
+  const run = (fn: () => Promise<void>) => start(async () => { await fn(); router.refresh(); });
+
+  return (
+    <div className="mt-2 text-[13px]">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="text-muted">
+          {source === "app" ? "Key saved (encrypted)" : source === "env" ? `Using ${help.env} from Vercel` : "No key yet"}
+        </span>
+        <button type="button" className="min-h-9 font-medium hover:underline md:min-h-0" onClick={() => setEditing(!editing)}>
+          {source ? "Replace key" : "Add key"}
+        </button>
+        {source && (
+          <button
+            type="button"
+            disabled={pending}
+            className="min-h-9 font-medium hover:underline md:min-h-0"
+            onClick={() =>
+              run(async () => {
+                const r = await testIntegration(provider);
+                toast({ message: r.ok ? r.message : r.error, durationMs: 6000 });
+              })
+            }
+          >
+            {pending ? "Testing…" : "Test connection"}
+          </button>
+        )}
+        {source === "app" && (
+          <button
+            type="button"
+            disabled={pending}
+            className="min-h-9 text-negative hover:underline md:min-h-0"
+            onClick={() =>
+              run(async () => {
+                const r = await saveIntegrationKey(provider, "");
+                toast({ message: r.ok ? "Key removed" : r.error });
+              })
+            }
+          >
+            Remove
+          </button>
+        )}
+      </div>
+      {editing && (
+        <form
+          className="mt-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            run(async () => {
+              const r = await saveIntegrationKey(provider, value);
+              if (!r.ok) return toast({ message: r.error });
+              setEditing(false);
+              setValue("");
+              const t = await testIntegration(provider);
+              toast({ message: t.ok ? `Key saved. ${t.message}` : `Key saved, but the test failed: ${t.error}`, durationMs: 8000 });
+            });
+          }}
+        >
+          <p className="mb-1.5 text-subtle-2">{help.where}</p>
+          {!canStore && <p className="mb-1.5 text-negative">Set ENCRYPTION_KEY in Vercel first, so keys can be stored encrypted.</p>}
+          <div className="flex flex-col gap-2 md:flex-row">
+            <input
+              className={fieldInputClass}
+              type="password"
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              placeholder={help.label}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+            />
+            <Button type="submit" disabled={pending || !value.trim() || !canStore} className="min-h-11 md:min-h-0">
+              {pending ? "Saving…" : "Save and test"}
+            </Button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }

@@ -2,18 +2,20 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { z } from "zod";
+import { getProviderKey } from "../keys";
 import { callProvider, IntegrationError } from "../run";
 
-export function anthropicConfigured(): boolean {
-  return !!process.env.ANTHROPIC_API_KEY;
+export async function anthropicConfigured(): Promise<boolean> {
+  return !!(await getProviderKey("anthropic"));
 }
 
 const model = () => process.env.ANTHROPIC_MODEL || "claude-opus-5-5";
 
-let client: Anthropic | null = null;
-function getClient() {
-  client ??= new Anthropic();
-  return client;
+// One client per key, so a key changed in Settings takes effect without a redeploy.
+let cached: { key: string; client: Anthropic } | null = null;
+function getClient(key: string) {
+  if (cached?.key !== key) cached = { key, client: new Anthropic({ apiKey: key }) };
+  return cached.client;
 }
 
 /**
@@ -28,7 +30,8 @@ export async function llmJson<S extends z.ZodType>(input: {
   effort?: "low" | "medium" | "high";
   maxTokens?: number;
 }): Promise<z.infer<S>> {
-  if (!anthropicConfigured()) throw new IntegrationError("anthropic", "ANTHROPIC_API_KEY is not set", false);
+  const key = await getProviderKey("anthropic");
+  if (!key) throw new IntegrationError("anthropic", "No Anthropic API key. Add one in Settings → Integrations.", false);
   let lastErr: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
@@ -36,7 +39,7 @@ export async function llmJson<S extends z.ZodType>(input: {
         "anthropic",
         input.schemaName,
         async (signal) => {
-          const res = await getClient().beta.messages.parse(
+          const res = await getClient(key).beta.messages.parse(
             {
               model: model(),
               max_tokens: input.maxTokens ?? 16000,
@@ -61,4 +64,14 @@ export async function llmJson<S extends z.ZodType>(input: {
     }
   }
   throw lastErr;
+}
+
+/** Cheap credential check for Settings → Integrations: looks up the configured model, no tokens spent. */
+export async function testAnthropicKey(): Promise<string> {
+  const key = await getProviderKey("anthropic");
+  if (!key) throw new IntegrationError("anthropic", "No Anthropic API key", false);
+  return callProvider("anthropic", "models.retrieve", async (signal) => {
+    const m = await getClient(key).models.retrieve(model(), {}, { signal });
+    return m.display_name ?? m.id;
+  }, { retries: 0 });
 }
