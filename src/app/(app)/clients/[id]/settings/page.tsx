@@ -33,6 +33,7 @@ export default async function ClientSettingsPage({ params }: { params: Promise<{
         includeInMonthlyReport: c.includeInMonthlyReport,
         paused: c.paused,
         onboarding: c.onboarding,
+        createdAt: c.createdAt.toISOString(),
       }}
       tiers={tiers.map((t) => ({ id: t.id, name: t.name, postsPerMonth: t.postsPerMonth, scanFrequency: t.scanFrequency, pricePence: t.pricePence }))}
       connections={connections.map((k) => ({

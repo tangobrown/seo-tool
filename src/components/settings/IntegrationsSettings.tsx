@@ -36,7 +36,7 @@ export function IntegrationsSettings({
   canStoreKeys: boolean;
   githubInstallUrl: string | null;
   githubConfigured: boolean;
-  env: { anthropic: boolean; serp: boolean; google: boolean; siteguru: boolean; slack: boolean };
+  env: { anthropic: boolean; serp: boolean; google: boolean; siteguru: boolean; slack: boolean; inngest: boolean };
 }) {
   return (
     <div>
@@ -75,6 +75,12 @@ export function IntegrationsSettings({
           </IntegrationRow>
         );
       })}
+      <IntegrationRow
+        p={{ name: "Inngest", letter: "In", desc: "Background jobs: onboarding, scans, syncs and Claude Code runs" }}
+        status={env.inngest ? "connected" : "not_connected"}
+        r={undefined}
+        action={<span className="text-[12px] text-subtle-2">{env.inngest ? "Keys set" : "Install the Inngest integration in Vercel"}</span>}
+      />
       <div className="flex items-center gap-3 border-b border-line py-3.5 opacity-50">
         <Logo letter="M" />
         <div className="min-w-0 flex-1">

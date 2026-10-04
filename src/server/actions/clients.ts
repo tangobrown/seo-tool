@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db";
@@ -8,7 +8,7 @@ import { clientConnections, clients, tiers } from "@/db/schema";
 import { EVENTS, inngest } from "@/jobs/client";
 import { audit } from "@/lib/audit";
 import { requireSession } from "@/lib/auth";
-import { resolveAttention } from "@/lib/attention";
+import { raiseAttention, resolveAttention } from "@/lib/attention";
 import { normaliseDomain } from "@/lib/format";
 import type { ActionResult } from "./recommendations";
 
@@ -126,11 +126,7 @@ export async function createClient(input: z.input<typeof newClientSchema>): Prom
     return c!;
   });
 
-  try {
-    await inngest.send({ name: EVENTS.clientOnboard, data: { clientId: client.id }, id: `onboard-${client.id}` });
-  } catch (e) {
-    console.error("Failed to start onboarding", e);
-  }
+  await startOnboarding(client.id, `onboard-${client.id}`);
   revalidatePath("/", "layout");
   return { ok: true, clientId: client.id, name: client.name };
 }
@@ -198,9 +194,36 @@ export async function retryOnboarding(clientId: string): Promise<ActionResult> {
   await requireSession();
   if (!uuid.safeParse(clientId).success) return { ok: false, error: "Invalid request" };
   await audit({ actor: "operator", clientId, entityType: "client", entityId: clientId, event: "client.onboarding_retried" });
-  await inngest.send({ name: EVENTS.clientOnboard, data: { clientId, retry: true }, id: `onboard-${clientId}-${Date.now()}` });
+  const started = await startOnboarding(clientId, `onboard-${clientId}-${Date.now()}`);
   revalidatePath(`/clients/${clientId}`, "layout");
-  return { ok: true };
+  return started ? { ok: true } : { ok: false, error: "Couldn’t reach the background job service (Inngest). See Needs attention." };
+}
+
+/**
+ * Sends the onboarding job. If the job service is unreachable, that's recorded on the client and
+ * raised in Needs attention instead of the client silently sitting at "setting up".
+ */
+async function startOnboarding(clientId: string, eventId: string): Promise<boolean> {
+  try {
+    await inngest.send({ name: EVENTS.clientOnboard, data: { clientId }, id: eventId });
+    await resolveAttention("inngest_unreachable");
+    return true;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.error("Failed to start onboarding", e);
+    await db
+      .update(clients)
+      .set({ onboarding: sql`${clients.onboarding} || ${JSON.stringify({ website: { status: "failed", at: new Date().toISOString(), message: `Background jobs unreachable: ${message.slice(0, 200)}` } })}::jsonb` })
+      .where(eq(clients.id, clientId));
+    await raiseAttention({
+      dedupeKey: "inngest_unreachable",
+      kind: "integration",
+      title: "Background jobs aren’t connected",
+      detail: "The app couldn’t send work to Inngest. Check the Inngest integration in Vercel (INNGEST_EVENT_KEY and INNGEST_SIGNING_KEY), then tap “Start setup again” on the client.",
+      link: "/settings/integrations",
+    });
+    return false;
+  }
 }
 
 export async function setClientConnection(clientId: string, provider: "siteguru" | "gbp" | "github", externalId: string): Promise<ActionResult> {

@@ -44,6 +44,7 @@ type ClientData = {
   includeInMonthlyReport: boolean;
   paused: boolean;
   onboarding: OnboardingState;
+  createdAt: string;
 };
 
 type TierData = { id: string; name: string; postsPerMonth: number; scanFrequency: "weekly" | "fortnightly" | "monthly"; pricePence: number };
@@ -106,7 +107,7 @@ export function ClientSettings({ client, tiers, connections }: { client: ClientD
 
   return (
     <div>
-      {onboarding && <OnboardingProgress steps={client.onboarding} />}
+      {onboarding && <OnboardingProgress clientId={client.id} steps={client.onboarding} createdAt={client.createdAt} />}
 
       <Section title="Tier" sub="Sets how often content is created and the site is scanned.">
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
@@ -287,10 +288,25 @@ const STEP_LABEL: Record<string, string> = {
   siteguru_sync: "First SiteGuru sync",
 };
 
-function OnboardingProgress({ steps }: { steps: OnboardingState }) {
+function OnboardingProgress({ clientId, steps, createdAt }: { clientId: string; steps: OnboardingState; createdAt: string }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [pending, start] = useTransition();
+  const [now] = useState(() => Date.now());
+  const nothingStarted = !Object.values(steps).some((s) => s && s.status !== "pending");
+  const stalled = nothingStarted && now - new Date(createdAt).getTime() > 2 * 60_000;
+  const failedToStart = steps.website?.status === "failed" && steps.website.message?.startsWith("Background jobs");
   return (
     <div className="mb-9 rounded-lg bg-sidebar px-3.5 py-3">
       <p className="mb-2 font-semibold">Setting up this client…</p>
+      {(stalled || failedToStart) && (
+        <p className="mb-2 text-[13px] text-negative">
+          {failedToStart
+            ? "The app couldn’t start the setup job."
+            : "Setup hasn’t started after 2 minutes. Background jobs (Inngest) probably aren’t connected to this deployment."}{" "}
+          Check that the Inngest integration is installed in Vercel and the app is synced in Inngest, then start again.
+        </p>
+      )}
       <ul className="text-[13px]">
         {Object.entries(STEP_LABEL).map(([k, label]) => {
           const s = steps[k];
@@ -308,6 +324,20 @@ function OnboardingProgress({ steps }: { steps: OnboardingState }) {
           );
         })}
       </ul>
+      <button
+        type="button"
+        disabled={pending}
+        className="mt-2 min-h-11 text-[13px] font-medium underline decoration-faint underline-offset-2 hover:decoration-ink md:min-h-0"
+        onClick={() =>
+          start(async () => {
+            const r = await retryOnboarding(clientId);
+            toast({ message: r.ok ? "Setup restarted" : r.error });
+            router.refresh();
+          })
+        }
+      >
+        {pending ? "Starting…" : "Start setup again"}
+      </button>
     </div>
   );
 }

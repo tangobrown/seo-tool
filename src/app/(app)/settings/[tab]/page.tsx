@@ -94,6 +94,7 @@ export default async function SettingsPage({
           google: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
           siteguru: !!siteguruKey,
           slack: !!ws.slackWebhookUrlEnc,
+          inngest: !!(process.env.INNGEST_EVENT_KEY && process.env.INNGEST_SIGNING_KEY) || process.env.INNGEST_DEV === "1",
         }}
         rows={rows.map((r) => ({
           provider: r.provider,
