@@ -23,7 +23,7 @@ export const batchDispatch = inngest.createFunction(
     },
   },
   async ({ event, step }) => {
-    const { batchId } = batchEvent.parse(event.data);
+    const { batchId, clientId } = batchEvent.parse(event.data);
 
     const startsAt = await step.run("load-batch", async () => {
       const [b] = await db.select().from(batches).where(eq(batches.id, batchId));
@@ -55,7 +55,8 @@ export const batchDispatch = inngest.createFunction(
         .innerJoin(clients, eq(clients.id, opportunities.clientId))
         .where(and(eq(executions.batchId, batchId), eq(executions.status, "queued")));
 
-      const manual = rows.filter((r) => r.exec.executionType === "manual_action" || r.exec.executionType === "outreach_draft");
+      // GBP writes arrive in Phase 6; until then they're manual checklists too.
+      const manual = rows.filter((r) => ["manual_action", "outreach_draft", "gbp_api"].includes(r.exec.executionType));
       for (const r of manual) {
         await raiseAttention({
           dedupeKey: `manual:${r.exec.id}`,
@@ -76,12 +77,17 @@ export const batchDispatch = inngest.createFunction(
     });
 
     if (split.automated.length) {
-      // Phase 1: the FakeExecutor stands in for Claude Code / GBP. Phase 5 replaces this with the GitHub provider.
-      await step.sendEvent("start-executor", {
-        name: EVENTS.fakeExecutorStart,
-        data: { batchId, executionIds: split.automated },
-        id: `fake-${batchId}`,
-      });
+      if (process.env.EXECUTION_MODE === "fake") {
+        // Local development and demos: simulate statuses instead of running Claude Code.
+        await step.sendEvent("start-fake-executor", { name: EVENTS.fakeExecutorStart, data: { batchId, executionIds: split.automated }, id: `fake-${batchId}` });
+      } else {
+        // §11.2: one GitHub job for the whole batch (Claude Code in the client repo's Actions).
+        await step.sendEvent("start-github", {
+          name: EVENTS.githubBatchStart,
+          data: { batchId, clientId, executionIds: split.automated },
+          id: `github-${batchId}`,
+        });
+      }
     }
     return { automated: split.automated.length };
   },

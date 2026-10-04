@@ -14,7 +14,8 @@ Internal app for a UK SEO agency. One operator reviews evidence-backed SEO recom
 | 2. Onboarding and GitHub App | **Built, not yet tested against a real GitHub App or Anthropic key.** GitHub App provider (no SDK, `jose` + `fetch`), install callback, repo picker, `client.onboard`, setup PR, crawl, LLM classification and discovery, Confirm and activate. Client-repo workflow and QA script in [`templates/client-repo`](templates/client-repo) |
 | 3. SiteGuru | **Built.** SiteGuru over its MCP server with an API key ([findings](docs/integrations/siteguru.md)), daily 05:00 sync, onboarding site matching, real KPIs/top pages/keywords, sync failures in Integrations and Needs attention. Integration keys can be pasted in Settings → Integrations |
 | 4. Opportunity engine | **Built.** Deterministic rules over stored SiteGuru signals and the page inventory (`src/domain/opportunities/`), scoring config stored in the DB, fingerprint dedupe, 90-day decline suppression, defer resurfacing, stale after 2 missed scans, selection with critical-first and category weights, new-page cap, LLM wording with a number guard, auto-approve for alt text/schema/image compression, tier-cadence scheduling with one Slack message per run, "Run a scan now" |
-| 5–9 | Not started. Onboarding marks the GBP and SERP steps as "skipped (Phase N)" |
+| 5. Claude Code execution | **Built, not yet run against a real repo.** Approved batches dispatch the client repo's `seo-autopilot.yml` (one job per client at a time), the workflow fetches an HMAC-signed spec (fresh one-time callback token), sends signed and deduplicated callbacks, and opens one PR per batch. Merge → production check every 2 min for 30 min → Live. PR closed unmerged → back to Recommendations. QA failure → Failed + Retry (fresh batch and branch). Reconciliation every 10 min, 60-minute timeout. Contract test runs the template's real `callback.mjs` against the app. `EXECUTION_MODE=fake` keeps the simulator for demos |
+| 6–9 | Not started. Onboarding marks the GBP and SERP steps as "skipped (Phase N)"; GBP changes are manual checklists until Phase 6 |
 
 ## Stack
 
@@ -71,3 +72,12 @@ Create a GitHub App on the agency's organisation:
 - Turn on "Allow GitHub Actions to create and approve pull requests" for the organisation. The workflow opens PRs with the workflow token.
 
 Details of the client-repo workflow and how the Claude Code Action runs headless: [`docs/integrations/claude-code-action.md`](docs/integrations/claude-code-action.md).
+
+**Before the first real batch**, for each client:
+1. Merge the setup PR that onboarding opened. Until then, approved website changes fail with "Merge the SEO Autopilot setup PR", and Retry works once it's merged.
+2. Check the org secret `SEO_AUTOPILOT_CALLBACK_SECRET` equals the app's `GITHUB_CALLBACK_SECRET`, and `APP_URL` is the public https URL of the app (the workflow fetches the spec from it).
+3. If the client's build needs environment variables, add them to the workflow's Build step.
+
+Known gaps:
+- **PRs don't trigger the client repo's own CI.** The workflow opens them with `GITHUB_TOKEN`. Vercel previews still run.
+- **Conflicts aren't detected automatically yet.** A PR that conflicts with an earlier unmerged one isn't marked Action needed; you'll see the conflict on GitHub.

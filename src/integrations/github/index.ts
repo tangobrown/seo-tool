@@ -6,7 +6,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import { integrations } from "@/db/schema";
 import { callProvider, IntegrationError } from "../run";
-import type { CodeExecutionProvider, RepoInfo } from "../types";
+import type { CodeExecutionProvider, RepoInfo, WorkflowRun } from "../types";
 
 const API = "https://api.github.com";
 
@@ -204,4 +204,51 @@ export const github: CodeExecutionProvider = {
       { timeoutMs: 60_000, retries: 1 },
     );
   },
+
+  /** Starts the client repo's SEO Autopilot workflow on the default branch (§11.2). */
+  async dispatchWorkflow(fullName, ref, inputs) {
+    await callProvider("github", "dispatchWorkflow", async (signal) => {
+      const token = await installationToken(signal);
+      await gh(`/repos/${fullName}/actions/workflows/seo-autopilot.yml/dispatches`, {
+        method: "POST",
+        token,
+        signal,
+        body: JSON.stringify({ ref, inputs }),
+      });
+    });
+  },
+
+  /** Recent runs of the SEO Autopilot workflow, for reconciliation when callbacks stop arriving. */
+  async listWorkflowRuns(fullName, createdSince) {
+    return callProvider("github", "listWorkflowRuns", async (signal) => {
+      const token = await installationToken(signal);
+      const out = await gh(
+        `/repos/${fullName}/actions/workflows/seo-autopilot.yml/runs?event=workflow_dispatch&per_page=50&created=${encodeURIComponent(`>=${createdSince.toISOString()}`)}`,
+        { token, signal },
+        z.object({ workflow_runs: z.array(workflowRunSchema) }),
+      );
+      return out.workflow_runs as WorkflowRun[];
+    });
+  },
+
+  async getPullRequest(fullName, number) {
+    return callProvider("github", "getPullRequest", async (signal) => {
+      const token = await installationToken(signal);
+      return gh(
+        `/repos/${fullName}/pulls/${number}`,
+        { token, signal },
+        z.object({ state: z.string(), merged: z.boolean(), mergeable: z.boolean().nullable(), html_url: z.string() }),
+      );
+    });
+  },
 };
+
+const workflowRunSchema = z.object({
+  id: z.number(),
+  name: z.string().nullable().optional(),
+  display_title: z.string().nullable().optional(),
+  status: z.string().nullable(),
+  conclusion: z.string().nullable(),
+  html_url: z.string(),
+  created_at: z.string(),
+});

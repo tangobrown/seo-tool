@@ -30,7 +30,20 @@ export interface CodeExecutionProvider {
     title: string;
     body: string;
   }): Promise<{ number: number; url: string; alreadyOpen: boolean }>;
+  dispatchWorkflow(fullName: string, ref: string, inputs: Record<string, string>): Promise<void>;
+  listWorkflowRuns(fullName: string, createdSince: Date): Promise<WorkflowRun[]>;
+  getPullRequest(fullName: string, number: number): Promise<{ state: string; merged: boolean; mergeable: boolean | null; html_url: string }>;
 }
+
+export type WorkflowRun = {
+  id: number;
+  name?: string | null;
+  display_title?: string | null;
+  status: string | null;
+  conclusion: string | null;
+  html_url: string;
+  created_at: string;
+};
 
 export type LLMProvider = {
   json<T>(input: { system: string; prompt: string; schemaName: string; validate: (v: unknown) => T; promptVersion: string }): Promise<T>;

@@ -6,6 +6,8 @@ import { githubJobs, webhookEvents } from "@/db/schema";
 import { audit } from "@/lib/audit";
 import { resolveAttention } from "@/lib/attention";
 import { hmacSha256, safeEqual } from "@/lib/crypto";
+import { EVENTS, inngest } from "@/jobs/client";
+import { onBatchPrClosed, onWorkflowRunCompleted } from "@/server/github-exec";
 
 const prEvent = z.object({
   action: z.string(),
@@ -13,9 +15,15 @@ const prEvent = z.object({
   repository: z.object({ full_name: z.string() }),
 });
 
+const runEvent = z.object({
+  action: z.string(),
+  workflow_run: z.object({ name: z.string().nullable().optional(), display_title: z.string().nullable().optional(), conclusion: z.string().nullable(), html_url: z.string() }),
+  repository: z.object({ full_name: z.string() }),
+});
+
 /**
  * GitHub App webhooks. Signature verified; deduped by delivery ID.
- * Phase 2 handles setup PRs closing. Batch PRs (merge → verify) arrive in Phase 5.
+ * Handles setup and batch PRs closing (merge → production verification) and workflow runs finishing.
  */
 export async function POST(req: NextRequest) {
   const secret = process.env.GITHUB_APP_WEBHOOK_SECRET;
@@ -42,6 +50,11 @@ export async function POST(req: NextRequest) {
     const p = prEvent.safeParse(body);
     if (p.success && p.data.action === "closed") {
       const { pull_request: pr, repository } = p.data;
+      // Batch PRs: merged → verify on production; closed → back to Recommendations.
+      const merged = await onBatchPrClosed(repository.full_name, pr.number, !!pr.merged);
+      if (merged) {
+        await inngest.send({ name: EVENTS.deploymentVerify, data: { batchId: merged.batchId }, id: `verify-${merged.batchId}` });
+      }
       const [job] = await db
         .update(githubJobs)
         .set({ status: pr.merged ? "merged" : "closed", mergedAt: pr.merged ? new Date() : null })
@@ -58,6 +71,14 @@ export async function POST(req: NextRequest) {
           after: { pr: pr.number },
         });
       }
+    }
+  }
+
+  if (event === "workflow_run") {
+    const w = runEvent.safeParse(body);
+    if (w.success && w.data.action === "completed") {
+      const run = w.data.workflow_run;
+      await onWorkflowRunCompleted(w.data.repository.full_name, run.display_title ?? run.name ?? "", run.conclusion, run.html_url);
     }
   }
 

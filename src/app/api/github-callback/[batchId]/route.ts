@@ -1,8 +1,16 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { handleCallback } from "@/server/github-exec";
 
-// Phase 5: Claude Code workflow callbacks (started / item_done / qa_result / pr_opened / failed).
-// The contract is documented in templates/client-repo/.seo-autopilot/README.md. Until Phase 5 the
-// app uses the FakeExecutor and never dispatches the workflow, so nothing should call this.
-export async function POST() {
-  return NextResponse.json({ error: "Not implemented until Phase 5" }, { status: 501 });
+/** Progress callbacks from the client repo's workflow: HMAC-signed, token-checked, deduped. */
+export async function POST(req: NextRequest, { params }: { params: Promise<{ batchId: string }> }) {
+  const { batchId } = await params;
+  if (!/^[0-9a-f-]{36}$/i.test(batchId)) return NextResponse.json({ error: "Bad batch id" }, { status: 400 });
+  const raw = await req.text();
+  if (raw.length > 100_000) return NextResponse.json({ error: "Too large" }, { status: 413 });
+  const out = await handleCallback(batchId, raw, {
+    ts: req.headers.get("x-seo-autopilot-timestamp"),
+    sig: req.headers.get("x-seo-autopilot-signature"),
+    token: req.headers.get("x-seo-autopilot-token"),
+  });
+  return NextResponse.json(out.body, { status: out.status });
 }

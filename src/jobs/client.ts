@@ -9,4 +9,6 @@ export const EVENTS = {
   clientActivated: "client.activated",
   siteguruSyncClient: "siteguru.sync.client",
   clientScan: "client.scan",
+  githubBatchStart: "github.batch.start",
+  deploymentVerify: "deployment.verify",
 } as const;
