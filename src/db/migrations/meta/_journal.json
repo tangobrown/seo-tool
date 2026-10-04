@@ -22,6 +22,13 @@
       "when": 1791115625171,
       "tag": "0002_month_snapshot_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791116478944,
+      "tag": "0003_opportunity_engine",
+      "breakpoints": true
     }
   ]
 }

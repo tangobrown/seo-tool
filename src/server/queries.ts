@@ -4,6 +4,7 @@ import { db } from "@/db";
 import {
   attentionItems,
   auditLog,
+  automationRuns,
   batches,
   blogCommitments,
   clientConnections,
@@ -123,7 +124,8 @@ export async function getRecommendations(clientId: string) {
     .select()
     .from(opportunities)
     .where(and(eq(opportunities.clientId, clientId), eq(opportunities.status, "recommended")))
-    .orderBy(desc(opportunities.priorityScore), asc(opportunities.title));
+    // Critical technical issues always come first (§10.5), then by score.
+    .orderBy(sql`case when ${opportunities.severity} = 'critical' then 0 else 1 end`, desc(opportunities.priorityScore), asc(opportunities.title));
 }
 
 export async function getActioned(clientId: string) {
@@ -248,4 +250,14 @@ export async function getAuditLog(page: number, clientId: string | null) {
 
 export async function getAllClientsBrief() {
   return db.select({ id: clients.id, name: clients.name }).from(clients).orderBy(asc(clients.name));
+}
+
+export async function getLastScan(clientId: string) {
+  const [r] = await db
+    .select({ status: automationRuns.status, startedAt: automationRuns.startedAt, finishedAt: automationRuns.finishedAt })
+    .from(automationRuns)
+    .where(and(eq(automationRuns.clientId, clientId), eq(automationRuns.kind, "client.scan")))
+    .orderBy(desc(automationRuns.startedAt))
+    .limit(1);
+  return r ?? null;
 }

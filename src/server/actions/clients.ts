@@ -224,3 +224,15 @@ export async function setClientConnection(clientId: string, provider: "siteguru"
   revalidatePath(`/clients/${clientId}`, "layout");
   return { ok: true };
 }
+
+/** Runs the opportunity scan now instead of waiting for the scheduled scan day. */
+export async function runScanNow(clientId: string): Promise<ActionResult> {
+  await requireSession();
+  if (!uuid.safeParse(clientId).success) return { ok: false, error: "Invalid request" };
+  const [c] = await db.select().from(clients).where(eq(clients.id, clientId));
+  if (!c) return { ok: false, error: "Client not found" };
+  if (c.status !== "active") return { ok: false, error: c.status === "paused" ? "Automation is paused for this client." : "Confirm the client’s details first." };
+  await inngest.send({ name: EVENTS.clientScan, data: { clientId, trigger: "manual" }, id: `scan-manual-${clientId}-${Date.now()}` });
+  await audit({ actor: "operator", clientId, entityType: "scan", event: "scan.requested" });
+  return { ok: true };
+}

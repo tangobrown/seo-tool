@@ -1,16 +1,20 @@
 import { notFound } from "next/navigation";
 import { RecommendationsList } from "@/components/client/RecommendationsList";
-import { getClient, getRecommendations } from "@/server/queries";
+import { AutoRefresh } from "@/components/ui/AutoRefresh";
+import { getClient, getLastScan, getRecommendations } from "@/server/queries";
 
 export default async function RecommendationsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const data = await getClient(id);
   if (!data) notFound();
-  const recs = await getRecommendations(id);
+  const [recs, lastScan] = await Promise.all([getRecommendations(id), getLastScan(id)]);
   return (
+    <>
+    {lastScan?.status === "running" && <AutoRefresh everyMs={5000} />}
     <RecommendationsList
       clientId={id}
       clientStatus={data.client.status}
+      lastScan={lastScan ? { status: lastScan.status, at: (lastScan.finishedAt ?? lastScan.startedAt).toISOString() } : null}
       items={recs.map((r) => ({
         id: r.id,
         category: r.category,
@@ -27,5 +31,6 @@ export default async function RecommendationsPage({ params }: { params: Promise<
         draft: (r.payload?.draft as { title: string; body: string } | undefined) ?? null,
       }))}
     />
+    </>
   );
 }

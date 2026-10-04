@@ -26,6 +26,37 @@ export const KEYWORDS_30D = {
   ],
 };
 
+// Detection inputs, trimmed from real projuice.co.uk responses.
+export const TODO = {
+  site_context: { cms: "wordpress" },
+  todo: {
+    tech: { tasks: [
+      { checkName: "siteMap", severity: "high", title: "Optimize your sitemap", description: "We did not find a sitemap on this site. That may cause slower and incomplete indexation.", affectedPages: 2, report_url: "https://app.siteguru.co/sites/sitemap_report/1" },
+      { checkName: "pageSpeed", severity: "medium", title: "Improve page speed", description: "24 pages are too slow.", affectedPages: 24 },
+    ] },
+    content: { tasks: [
+      { checkName: "brokenLinks", severity: "high", title: "Fix broken links", description: "1 broken link on 1 page.", affectedPages: 1 },
+      { checkName: "imageAltTags", severity: "medium", title: "Add alt texts to your images", description: "50 pages have images without alt texts.", affectedPages: 50 },
+      { checkName: "similarContent", severity: "medium", title: "Review similar content", description: "We found 238 pages with similar content.", affectedPages: 238 },
+    ] },
+    opportunity: { tasks: [] },
+  },
+};
+export const LHF = {
+  status: "ok",
+  opportunities: [
+    { keyword: "frozen acai", path: "/product/acai-puree", clicks: 23, impressions: 6867, ctr: 0, avg_position: 4.2 },
+    { keyword: "frozen raspberries", path: "/product/raspberry-10kg", clicks: 42, impressions: 5415, ctr: 0.01, avg_position: 5.7 },
+    { keyword: "blueberries benefits", path: "/blog/the-top-10-health-benefits-of-blueberries", clicks: 6, impressions: 5802, ctr: 0, avg_position: 8.3 },
+  ],
+};
+export const DECLINING = {
+  data_status: "ok",
+  months: ["2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08"],
+  pages: [{ path: "/product-category/smoothies/", net_change: -63, percent_change: -43.8, oldest_month_clicks: 144, newest_month_clicks: 81 }],
+};
+export const CANNIBAL = { status: "ok", keywords: [] };
+
 export const SITES = {
   sites: [
     { domain: "https://www.projuice.co.uk", health_score: 89, data_sources: { search_console: { connected: true }, analytics: { connected: true } } },
@@ -62,6 +93,10 @@ export async function startMockMcp(opts: Opts = {}): Promise<{ url: string; call
       } else {
         if (name === "list_sites") data = SITES;
         else if (name === "get_top_keywords") data = KEYWORDS_30D;
+        else if (name === "get_todo_list") data = TODO;
+        else if (name === "get_low_hanging_fruit") data = LHF;
+        else if (name === "get_declining_content") data = DECLINING;
+        else if (name === "get_keyword_cannibalization") data = CANNIBAL;
         else if (name === "get_traffic_overview") {
           // Only last_30_days and September 2026 are "cached"; anything else is empty.
           if (args.range === "last_30_days") data = OVERVIEW_30D;

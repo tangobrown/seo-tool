@@ -8,4 +8,5 @@ export const EVENTS = {
   clientOnboard: "client.onboard",
   clientActivated: "client.activated",
   siteguruSyncClient: "siteguru.sync.client",
+  clientScan: "client.scan",
 } as const;

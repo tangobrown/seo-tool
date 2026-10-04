@@ -13,6 +13,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import type { ScoringConfig } from "@/domain/opportunities/config";
 
 const id = () => uuid("id").primaryKey().defaultRandom();
 const ts = (name: string) => timestamp(name, { withTimezone: true });
@@ -140,6 +141,8 @@ export const workspace = pgTable("workspace", {
   slackWebhookUrlEnc: text("slack_webhook_url_enc"),
   weightingMode: text("weighting_mode").notNull().default("auto"),
   weights: jsonb("weights").$type<Record<string, number>>(),
+  /** Scoring config (§10.5). Null keys fall back to DEFAULT_SCORING in domain/opportunities/config.ts. */
+  scoring: jsonb("scoring").$type<Partial<ScoringConfig>>(),
   updatedAt: ts("updated_at").notNull().defaultNow(),
 });
 
@@ -330,6 +333,15 @@ export const opportunities = pgTable(
     firstDetectedAt: ts("first_detected_at").notNull().defaultNow(),
     lastDetectedAt: ts("last_detected_at").notNull().defaultNow(),
     timesRecommended: integer("times_recommended").notNull().default(0),
+    actionKey: text("action_key"),
+    /** "critical" bypasses weighting and always appears first (§10.5). */
+    severity: text("severity").notNull().default("normal"),
+    /** Consecutive scans this candidate wasn't detected in; 2 → stale. */
+    missedScans: integer("missed_scans").notNull().default(0),
+    /** Priority score when the operator declined it, for the "rises by 15" reopen rule. */
+    scoreAtDecision: real("score_at_decision"),
+    /** "template" (rule text) or "llm" (rewritten from evidence; prompt version in payload). */
+    textSource: text("text_source").notNull().default("template"),
   },
   (t) => [
     index("opportunities_client_idx").on(t.clientId),
@@ -622,3 +634,17 @@ export type AttentionItem = typeof attentionItems.$inferSelect;
 export type MonthlyReport = typeof monthlyReports.$inferSelect;
 export type Integration = typeof integrations.$inferSelect;
 export type ClientConnection = typeof clientConnections.$inferSelect;
+
+/** Raw SiteGuru detection inputs captured at each scan. Detection reads these, never live calls. */
+export const siteguruSignals = pgTable(
+  "siteguru_signals",
+  {
+    id: id(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id),
+    capturedAt: ts("captured_at").notNull().defaultNow(),
+    signals: jsonb("signals").$type<Record<string, unknown>>().notNull(),
+  },
+  (t) => [index("siteguru_signals_client_idx").on(t.clientId, t.capturedAt)],
+);

@@ -135,7 +135,8 @@ export async function declineRecommendations(input: { clientId: string; opportun
   if (!parsed.success) return { ok: false, error: "Invalid request" };
   const rows = await db
     .update(opportunities)
-    .set({ status: "declined", decidedAt: new Date(), decidedBy: "operator" })
+    // Score at decision powers the "reappears only if the score rises by 15" rule (§10.4).
+    .set({ status: "declined", decidedAt: new Date(), decidedBy: "operator", scoreAtDecision: sql`${opportunities.priorityScore}` })
     .where(
       and(
         eq(opportunities.clientId, parsed.data.clientId),

@@ -14,13 +14,16 @@ export async function createApprovalBatch(input: {
   opportunityIds: string[];
   idempotencyKey: string;
   undoWindowSeconds: number;
+  /** Auto-approved batches (low-impact fixes) skip the undo window and are attributed to the system. */
+  auto?: boolean;
 }) {
   const { clientId, opportunityIds, idempotencyKey, undoWindowSeconds } = input;
+  const auto = input.auto ?? false;
   return db.transaction(async (tx) => {
     const startsAt = new Date(Date.now() + undoWindowSeconds * 1000);
     const [batch] = await tx
       .insert(batches)
-      .values({ clientId, idempotencyKey, startsAt, createdBy: "operator" })
+      .values({ clientId, idempotencyKey, startsAt, createdBy: auto ? "auto" : "operator" })
       .onConflictDoNothing({ target: batches.idempotencyKey })
       .returning();
     if (!batch) {
@@ -35,7 +38,7 @@ export async function createApprovalBatch(input: {
     const now = new Date();
     const approved = await tx
       .update(opportunities)
-      .set({ status: "approved", decidedAt: now, decidedBy: "operator", batchId: batch.id, statusNote: null })
+      .set({ status: "approved", decidedAt: now, decidedBy: auto ? "system" : "operator", batchId: batch.id, statusNote: null })
       .where(
         and(
           eq(opportunities.clientId, clientId),
@@ -58,11 +61,11 @@ export async function createApprovalBatch(input: {
     );
     await audit(
       {
-        actor: "operator",
+        actor: auto ? "system" : "operator",
         clientId,
         entityType: "batch",
         entityId: batch.id,
-        event: "recommendations.approved",
+        event: auto ? "recommendations.auto_approved" : "recommendations.approved",
         after: { batchId: batch.id, startsAt: startsAt.toISOString(), opportunities: approved.map((o) => o.title) },
       },
       tx,

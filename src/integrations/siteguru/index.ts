@@ -2,7 +2,22 @@ import "server-only";
 import { getProviderKey } from "../keys";
 import { McpClient, toolJson } from "../mcp/client";
 import { callProvider, IntegrationError } from "../run";
-import { listSitesSchema, topKeywordsSchema, trafficOverviewSchema, type SiteguruSiteRaw, type TopKeywords, type TrafficOverview } from "./schemas";
+import {
+  cannibalizationSchema,
+  decliningSchema,
+  listSitesSchema,
+  lowHangingFruitSchema,
+  todoListSchema,
+  topKeywordsSchema,
+  trafficOverviewSchema,
+  type Cannibalization,
+  type Declining,
+  type LowHangingFruit,
+  type SiteguruSiteRaw,
+  type TodoList,
+  type TopKeywords,
+  type TrafficOverview,
+} from "./schemas";
 
 export const SITEGURU_MCP_URL = process.env.SITEGURU_MCP_URL || "https://mcp.siteguru.co/mcp";
 const CONTEXT = "SEO Autopilot scheduled sync for an agency client";
@@ -40,6 +55,34 @@ export const siteguru = {
     const c = await client();
     return callProvider("siteguru", "get_top_keywords", async (signal) =>
       topKeywordsSchema.parse(toolJson(await c.callTool("get_top_keywords", { site, ...period, context: CONTEXT }, signal))),
+    );
+  },
+
+  async todoList(site: string): Promise<TodoList> {
+    const c = await client();
+    return callProvider("siteguru", "get_todo_list", async (signal) =>
+      todoListSchema.parse(toolJson(await c.callTool("get_todo_list", { site, context: CONTEXT }, signal))),
+    );
+  },
+
+  async lowHangingFruit(site: string, period: Period): Promise<LowHangingFruit> {
+    const c = await client();
+    return callProvider("siteguru", "get_low_hanging_fruit", async (signal) =>
+      lowHangingFruitSchema.parse(toolJson(await c.callTool("get_low_hanging_fruit", { site, ...period, context: CONTEXT }, signal))),
+    );
+  },
+
+  async decliningContent(site: string): Promise<Declining> {
+    const c = await client();
+    return callProvider("siteguru", "get_declining_content", async (signal) =>
+      decliningSchema.parse(toolJson(await c.callTool("get_declining_content", { site, context: CONTEXT }, signal))),
+    );
+  },
+
+  async cannibalization(site: string, period: Period): Promise<Cannibalization> {
+    const c = await client();
+    return callProvider("siteguru", "get_keyword_cannibalization", async (signal) =>
+      cannibalizationSchema.parse(toolJson(await c.callTool("get_keyword_cannibalization", { site, ...period, context: CONTEXT }, signal))),
     );
   },
 };

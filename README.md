@@ -13,7 +13,8 @@ Internal app for a UK SEO agency. One operator reviews evidence-backed SEO recom
 | 1. Foundation and UI shell | **Built.** Every §7 screen, auth with rate limiting, Drizzle schema, seed, audit log, attention items, Inngest wiring, batches with the undo window, FakeExecutor |
 | 2. Onboarding and GitHub App | **Built, not yet tested against a real GitHub App or Anthropic key.** GitHub App provider (no SDK, `jose` + `fetch`), install callback, repo picker, `client.onboard`, setup PR, crawl, LLM classification and discovery, Confirm and activate. Client-repo workflow and QA script in [`templates/client-repo`](templates/client-repo) |
 | 3. SiteGuru | **Built.** SiteGuru over its MCP server with an API key ([findings](docs/integrations/siteguru.md)), daily 05:00 sync, onboarding site matching, real KPIs/top pages/keywords, sync failures in Integrations and Needs attention. Integration keys can be pasted in Settings → Integrations |
-| 4–9 | Not started. Onboarding marks the GBP and SERP steps as "skipped (Phase N)" |
+| 4. Opportunity engine | **Built.** Deterministic rules over stored SiteGuru signals and the page inventory (`src/domain/opportunities/`), scoring config stored in the DB, fingerprint dedupe, 90-day decline suppression, defer resurfacing, stale after 2 missed scans, selection with critical-first and category weights, new-page cap, LLM wording with a number guard, auto-approve for alt text/schema/image compression, tier-cadence scheduling with one Slack message per run, "Run a scan now" |
+| 5–9 | Not started. Onboarding marks the GBP and SERP steps as "skipped (Phase N)" |
 
 ## Stack
 

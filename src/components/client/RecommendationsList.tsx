@@ -11,6 +11,8 @@ import { PropertyRow } from "@/components/ui/PropertyRow";
 import { Tag } from "@/components/ui/Tag";
 import { CATEGORY_TAG, IMPACT_TAG } from "@/components/ui/tags";
 import { useToast } from "@/components/ui/Toast";
+import { formatDateTime } from "@/lib/format";
+import { runScanNow } from "@/server/actions/clients";
 import { DraftPreview } from "./DraftPreview";
 import {
   approveRecommendations,
@@ -54,10 +56,12 @@ function startsInText(startsAtIso: string): string {
 export function RecommendationsList({
   clientId,
   clientStatus,
+  lastScan,
   items,
 }: {
   clientId: string;
   clientStatus: string;
+  lastScan: { status: string; at: string } | null;
   items: RecItem[];
 }) {
   const router = useRouter();
@@ -163,7 +167,10 @@ export function RecommendationsList({
   return (
     <div>
       {visible.length === 0 ? (
-        <EmptyState>All caught up. New recommendations arrive after the next site scan.</EmptyState>
+        <EmptyState>
+          {lastScan?.status === "running" ? "Scanning the site — recommendations will appear here shortly." : "All caught up. New recommendations arrive after the next site scan."}
+          <ScanNow clientId={clientId} lastScan={lastScan} />
+        </EmptyState>
       ) : (
         <>
           <div className="sticky top-0 z-[2] flex min-h-12 items-center justify-between gap-2 border-y border-line bg-white px-1 py-2">
@@ -225,6 +232,7 @@ export function RecommendationsList({
           })}
           <p className="mt-4 text-[12px] text-subtle-2">
             Approved changes start after a short undo window. Website changes arrive as one pull request per batch.
+            {lastScan ? ` Last scan ${formatDateTime(lastScan.at)}.` : ""}
           </p>
         </>
       )}
@@ -278,6 +286,32 @@ export function RecDetails({ r, onPreview }: { r: Pick<RecItem, "why" | "evidenc
           Preview draft
         </button>
       )}
+    </div>
+  );
+}
+
+function ScanNow({ clientId, lastScan }: { clientId: string; lastScan: { status: string; at: string } | null }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  if (lastScan?.status === "running") return null;
+  return (
+    <div className="mt-3 text-[13px]">
+      {lastScan && <div>Last scan {formatDateTime(lastScan.at)}{lastScan.status === "failed" ? " (failed)" : ""}</div>}
+      <button
+        type="button"
+        disabled={busy}
+        className="mt-1 min-h-11 font-medium text-ink underline decoration-faint underline-offset-2 hover:decoration-ink md:min-h-0"
+        onClick={async () => {
+          setBusy(true);
+          const r = await runScanNow(clientId);
+          setBusy(false);
+          toast({ message: r.ok ? "Scan started — this takes a minute" : r.error });
+          if (r.ok) setTimeout(() => router.refresh(), 4000);
+        }}
+      >
+        {busy ? "Starting…" : "Run a scan now"}
+      </button>
     </div>
   );
 }
