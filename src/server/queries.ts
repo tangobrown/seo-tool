@@ -116,7 +116,17 @@ export async function getClient(id: string) {
     .select()
     .from(blogCommitments)
     .where(and(eq(blogCommitments.clientId, id), eq(blogCommitments.period, periodOf(new Date()))));
-  return { ...row, pending: pending?.n ?? 0, commitment: commitment ?? null };
+  // Live progress from the posts themselves, so approvals and go-lives show straight away.
+  const [live] = await db
+    .select({
+      planned: sql<number>`count(*)::int`,
+      approved: sql<number>`count(*) filter (where ${opportunities.status} in ('approved','executing','completed'))::int`,
+      published: sql<number>`count(*) filter (where ${opportunities.status} = 'completed')::int`,
+    })
+    .from(opportunities)
+    .where(and(eq(opportunities.clientId, id), eq(opportunities.isBlogCommitment, true), sql`${opportunities.payload}->>'period' = ${periodOf(new Date())}`));
+  const progress = commitment && live?.planned ? { ...commitment, approved: live.approved, published: live.published } : commitment;
+  return { ...row, pending: pending?.n ?? 0, commitment: progress ?? null };
 }
 
 export async function getRecommendations(clientId: string) {

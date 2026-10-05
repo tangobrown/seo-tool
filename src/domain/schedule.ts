@@ -35,3 +35,22 @@ export function londonParts(now: Date): { date: Date; isoDay: number; hhmm: stri
   const isoDay = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(get("weekday")) + 1;
   return { date, isoDay, hhmm: `${get("hour")}:${get("minute")}` };
 }
+
+/** The UTC instant of 00:00 Europe/London on a calendar date (handles GMT/BST). */
+export function londonMidnight(y: number, m: number, d: number): Date {
+  const guess = Date.UTC(y, m - 1, d);
+  const h = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", hour12: false }).format(new Date(guess))) % 24;
+  return new Date(guess - h * 3600_000);
+}
+
+/** "2026-09" → [1 Sep 00:00 London, 1 Oct 00:00 London). */
+export function londonMonthBounds(period: string): { start: Date; end: Date } {
+  const [y, m] = period.split("-").map(Number) as [number, number];
+  return { start: londonMidnight(y, m, 1), end: m === 12 ? londonMidnight(y + 1, 1, 1) : londonMidnight(y, m + 1, 1) };
+}
+
+/** "2026-10" → "2026-09" */
+export function previousPeriod(period: string): string {
+  const [y, m] = period.split("-").map(Number) as [number, number];
+  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
+}

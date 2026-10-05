@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BarChart, type Bar } from "@/components/ui/BarChart";
+import { GenerateReportButton } from "@/components/client/ReportActions";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { KpiStrip, type Kpi } from "@/components/ui/KpiStrip";
 import { Tag } from "@/components/ui/Tag";
 import { formatDate, formatDayMonth, formatMonthShort, formatMonthYear, formatNumber, periodOf } from "@/lib/format";
+import { previousPeriod } from "@/domain/schedule";
 import { getClient, getReportsOverview } from "@/server/queries";
 
 function delta(curr: number | null | undefined, prev: number | null | undefined, lowerIsBetter = false): Kpi["delta"] {
@@ -24,6 +26,8 @@ export default async function ReportsPage({ params }: { params: Promise<{ id: st
   if (!data) notFound();
   const { rolling, months, reports } = await getReportsOverview(id);
   const base = `/clients/${id}/reports`;
+  const lastPeriod = previousPeriod(periodOf(new Date()));
+  const canGenerate = data.client.status === "active" && data.client.includeInMonthlyReport && !reports.some((r) => r.period === lastPeriod);
 
   if (!rolling && !reports.length) {
     return (
@@ -108,7 +112,12 @@ export default async function ReportsPage({ params }: { params: Promise<{ id: st
       <div className="mt-10">
         <h2 className="mb-1.5 text-[16px] font-semibold">Monthly reports</h2>
         <p className="mb-3 text-[13px] text-muted">A summary of the previous month is generated on the 1st of each month.</p>
-        {reports.length === 0 && <div className="py-3 text-subtle-2">The first report generates on {formatDate(nextFirst(now))}.</div>}
+        {reports.length === 0 && !canGenerate && <div className="py-3 text-subtle-2">The first report generates on {formatDate(nextFirst(now))}.</div>}
+        {canGenerate && (
+          <div className="mb-2 text-[13px]">
+            <GenerateReportButton clientId={id} label={formatMonthYear(lastPeriod)} />
+          </div>
+        )}
         {reports.map((r) => (
           <Link key={r.id} href={`${base}/${r.id}`} className="flex min-h-12 items-center gap-3 border-b border-line px-1 py-2.5 transition-quiet hover:bg-row-hover">
             <span aria-hidden className="h-6 w-5 shrink-0 rounded-[3px] border-[1.5px] border-faint" />

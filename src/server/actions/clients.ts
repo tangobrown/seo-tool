@@ -259,3 +259,16 @@ export async function runScanNow(clientId: string): Promise<ActionResult> {
   await audit({ actor: "operator", clientId, entityType: "scan", event: "scan.requested" });
   return { ok: true };
 }
+
+/** Plans (and starts drafting) this month's blog posts now, instead of waiting for the 1st. */
+export async function planBlogNow(clientId: string): Promise<ActionResult> {
+  await requireSession();
+  if (!uuid.safeParse(clientId).success) return { ok: false, error: "Invalid request" };
+  const [row] = await db.select({ c: clients, posts: tiers.postsPerMonth }).from(clients).innerJoin(tiers, eq(tiers.id, clients.tierId)).where(eq(clients.id, clientId));
+  if (!row) return { ok: false, error: "Client not found" };
+  if (row.c.status !== "active" || row.c.paused) return { ok: false, error: "Automation is paused or the client isn’t active yet." };
+  if (row.posts <= 0) return { ok: false, error: "This client’s tier doesn’t include blog posts." };
+  await inngest.send({ name: EVENTS.blogPlanClient, data: { clientId }, id: `blog-plan-manual-${clientId}-${Date.now()}` });
+  await audit({ actor: "operator", clientId, entityType: "blog_commitment", event: "blog.plan_requested" });
+  return { ok: true };
+}

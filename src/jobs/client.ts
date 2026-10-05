@@ -11,4 +11,7 @@ export const EVENTS = {
   clientScan: "client.scan",
   githubBatchStart: "github.batch.start",
   deploymentVerify: "deployment.verify",
+  reportMonthly: "report.monthly.run",
+  blogPlanClient: "blog.plan.client",
+  blogDraftClient: "blog.draft.client",
 } as const;

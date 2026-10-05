@@ -9,6 +9,7 @@ import { cx } from "@/components/ui/cx";
 import { fieldInputClass, Modal } from "@/components/ui/Modal";
 import { PropertyRow, propertyInputClass } from "@/components/ui/PropertyRow";
 import { useToast } from "@/components/ui/Toast";
+import { PlanBlogButton } from "./ReportActions";
 import { ToggleRow } from "@/components/ui/Toggle";
 import { useDebouncedSave } from "@/components/ui/useAutosave";
 import { formatPounds, relativeTime, SCAN_LABEL } from "@/lib/format";
@@ -61,7 +62,18 @@ function Section({ title, sub, children }: { title: string; sub?: React.ReactNod
   );
 }
 
-export function ClientSettings({ client, tiers, connections }: { client: ClientData; tiers: TierData[]; connections: Connection[] }) {
+export function ClientSettings({
+  client,
+  tiers,
+  connections,
+  blog,
+}: {
+  client: ClientData;
+  tiers: TierData[];
+  connections: Connection[];
+  /** This month's blog posts: planned so far vs the tier's commitment. */
+  blog?: { planned: number; committed: number };
+}) {
   const router = useRouter();
   const toast = useToast();
   const [c, setC] = useState(client);
@@ -230,6 +242,14 @@ export function ClientSettings({ client, tiers, connections }: { client: ClientD
           onChange={setToggle("autoApproveLowImpact")}
         />
         <ToggleRow label="Review blog posts before publishing" description="Drafts appear in Recommendations first" on={c.reviewBlogPosts} onChange={setToggle("reviewBlogPosts")} />
+        {client.status === "active" && !c.paused && blog && blog.committed > 0 && blog.planned < blog.committed && (
+          <div className="border-b border-line py-3 text-[13px]">
+            <div className="mb-0.5 text-muted">
+              {blog.planned} of {blog.committed} blog posts planned this month.
+            </div>
+            <PlanBlogButton clientId={client.id} />
+          </div>
+        )}
         <ToggleRow
           label="Include in monthly report"
           description="Generate a summary for this client on the 1st"

@@ -58,6 +58,13 @@ function acceptanceCriteria(o: typeof opportunities.$inferSelect): string[] {
       return [...common, "New page has a unique title, meta description, H1 and self-referencing canonical.", "New page is linked from at least one existing page and appears in the sitemap.", "Uses only the services and locations in the spec."];
     case "internal_linking":
       return [...common, "Links use descriptive anchor text and point at existing routes."];
+    case "blog_content":
+      return [
+        ...common,
+        `Adds a new blog post at ${o.targetUrl ?? "the blog"} using the site’s existing blog structure and layout (no new design or dependencies).`,
+        "Uses content.body_markdown as provided (formatting only), with content.title as the H1 and title, and content.meta_description as the meta description.",
+        "Post has a self-referencing canonical, is listed on the blog index and appears in the sitemap.",
+      ];
     case "schema":
       return [...common, "JSON-LD parses and has the correct @type."];
     default:
