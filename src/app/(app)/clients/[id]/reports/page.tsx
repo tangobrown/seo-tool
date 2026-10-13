@@ -33,7 +33,7 @@ export default async function ReportsPage({ params }: { params: Promise<{ id: st
   if (!rolling && !reports.length) {
     return (
       <EmptyState>
-        Connecting to SiteGuru. Data will appear within 24 hours — the first monthly report generates on {formatDate(nextFirst(new Date()))}.
+        Link this client’s Search Console property in Settings → Connections. Data appears within a few minutes of linking — the first monthly report generates on {formatDate(nextFirst(new Date()))}.
       </EmptyState>
     );
   }

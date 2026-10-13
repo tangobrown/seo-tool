@@ -164,7 +164,7 @@ export async function gscSignals(property: string, now = new Date()): Promise<Pi
   };
 }
 
-/** Clients that read search data from Search Console rather than SiteGuru. */
+/** Clients with a Search Console property linked. */
 export async function usesGsc(clientId: string): Promise<boolean> {
   const [c] = await db.select({ p: clients.gscProperty }).from(clients).where(eq(clients.id, clientId));
   return !!c?.p;

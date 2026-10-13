@@ -44,8 +44,9 @@ export async function blogPostsForPeriod(clientId: string, period: string) {
 
 // ── Planning (1st of the month, §10.6) ─────────────────────────────────────────
 
-/** Real demand: the latest stored SiteGuru keywords and low-hanging-fruit queries, strongest first. */
+/** Real demand: the latest stored Search Console keywords and near-miss queries, strongest first. */
 async function demandKeywords(clientId: string): Promise<{ keywords: DemandKeyword[]; source: "siteguru" | "gsc" }> {
+  // Rows captured before 13 Oct 2026 came from SiteGuru; the evidence label keeps that honest.
   const [row] = await db
     .select({ signals: siteguruSignals.signals, source: siteguruSignals.source })
     .from(siteguruSignals)

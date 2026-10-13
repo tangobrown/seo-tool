@@ -22,7 +22,7 @@ import {
 import { periodOf } from "@/lib/format";
 
 
-/** Sort key: Search Console snapshots before SiteGuru ones. */
+/** Sort key: Search Console snapshots before SiteGuru ones (SiteGuru months are kept as history). */
 const preferGsc = sql`case when ${metricSnapshots.source} = 'gsc' then 0 else 1 end`;
 
 export async function getWorkspace() {
@@ -52,7 +52,7 @@ export async function getShellData() {
     db
       .select({ clientId: clientConnections.clientId, at: clientConnections.lastSuccessAt })
       .from(clientConnections)
-      .where(and(eq(clientConnections.provider, "siteguru"), isNotNull(clientConnections.lastSuccessAt))),
+      .where(and(eq(clientConnections.provider, "gsc"), isNotNull(clientConnections.lastSuccessAt))),
   ]);
   const syncByClient: Record<string, string> = {};
   let latest: Date | null = null;
@@ -93,9 +93,8 @@ export async function getDashboard(showArchived: boolean) {
     ? await db
         .selectDistinctOn([metricSnapshots.clientId], { clientId: metricSnapshots.clientId, metrics: metricSnapshots.metrics })
         .from(metricSnapshots)
-        .where(and(inArray(metricSnapshots.clientId, ids), inArray(metricSnapshots.source, ["gsc", "siteguru"]), eq(metricSnapshots.kind, "rolling30")))
-        // Search Console is preferred when a client has it; SiteGuru otherwise.
-        .orderBy(metricSnapshots.clientId, preferGsc, desc(metricSnapshots.capturedAt))
+        .where(and(inArray(metricSnapshots.clientId, ids), eq(metricSnapshots.source, "gsc"), eq(metricSnapshots.kind, "rolling30")))
+        .orderBy(metricSnapshots.clientId, desc(metricSnapshots.capturedAt))
     : [];
   const snapBy = new Map(snaps.map((s) => [s.clientId, s.metrics]));
   const [archived] = await db.select({ n: sql<number>`count(*)::int` }).from(clients).where(isNotNull(clients.archivedAt));
@@ -181,10 +180,10 @@ export async function getReportsOverview(clientId: string) {
   const [rolling] = await db
     .select()
     .from(metricSnapshots)
-    .where(and(eq(metricSnapshots.clientId, clientId), inArray(metricSnapshots.source, ["gsc", "siteguru"]), eq(metricSnapshots.kind, "rolling30")))
-    .orderBy(preferGsc, desc(metricSnapshots.capturedAt))
+    .where(and(eq(metricSnapshots.clientId, clientId), eq(metricSnapshots.source, "gsc"), eq(metricSnapshots.kind, "rolling30")))
+    .orderBy(desc(metricSnapshots.capturedAt))
     .limit(1);
-  // One row per month: Search Console's figure when there is one, SiteGuru's otherwise.
+  // One row per month: Search Console's figure, or SiteGuru's for months recorded before the switch (history only).
   const months = await db
     .selectDistinctOn([metricSnapshots.periodStart], { periodStart: metricSnapshots.periodStart, metrics: metricSnapshots.metrics })
     .from(metricSnapshots)
@@ -276,19 +275,4 @@ export async function getLastScan(clientId: string) {
     .orderBy(desc(automationRuns.startedAt))
     .limit(1);
   return r ?? null;
-}
-
-/** Latest last-30-day clicks from Search Console and from SiteGuru, for the side-by-side check. */
-export async function getSourceComparison(clientId: string): Promise<{ gsc: number | null; siteguru: number | null }> {
-  const latest = async (source: "gsc" | "siteguru") => {
-    const [r] = await db
-      .select({ metrics: metricSnapshots.metrics })
-      .from(metricSnapshots)
-      .where(and(eq(metricSnapshots.clientId, clientId), eq(metricSnapshots.source, source), eq(metricSnapshots.kind, "rolling30")))
-      .orderBy(desc(metricSnapshots.capturedAt))
-      .limit(1);
-    return r?.metrics.clicks ?? null;
-  };
-  const [gsc, siteguru] = await Promise.all([latest("gsc"), latest("siteguru")]);
-  return { gsc, siteguru };
 }

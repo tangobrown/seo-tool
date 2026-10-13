@@ -11,8 +11,8 @@ import { formatDateTime } from "@/lib/format";
 import { saveIntegrationKey, testIntegration } from "@/server/actions/integrations";
 
 type KeySource = "app" | "env" | null;
-type Keyed = "siteguru" | "anthropic" | "gsc" | "dataforseo" | "pagespeed";
-const KEYED = new Set<string>(["siteguru", "anthropic", "gsc", "dataforseo", "pagespeed"]);
+type Keyed = "anthropic" | "gsc" | "dataforseo" | "pagespeed";
+const KEYED = new Set<string>(["anthropic", "gsc", "dataforseo", "pagespeed"]);
 
 type Row = { provider: string; status: string; lastSuccessAt: string | null; lastFailureAt: string | null; lastError: string | null; account: string | null };
 
@@ -20,7 +20,6 @@ const PROVIDERS = [
   { key: "gsc", name: "Google Search Console", letter: "SC", desc: "Real clicks, impressions and searches for each client (service account)" },
   { key: "dataforseo", name: "DataForSEO", letter: "DF", desc: "Site audits, and Google and map rankings for each service and town" },
   { key: "pagespeed", name: "PageSpeed Insights", letter: "PS", desc: "Mobile speed scores. Works without a key; a key raises Google’s limit" },
-  { key: "siteguru", name: "SiteGuru", letter: "SG", desc: "SEO data for clients without Search Console linked" },
   { key: "github", name: "GitHub", letter: "GH", desc: "GitHub App: client repos, setup PRs and Claude Code runs" },
   { key: "gbp", name: "Google Business Profile", letter: "G", desc: "Profile, performance and reviews; supported edits" },
   { key: "anthropic", name: "Anthropic", letter: "A", desc: "Classification, recommendation text, reports and drafts" },
@@ -40,7 +39,7 @@ export function IntegrationsSettings({
   canStoreKeys: boolean;
   githubInstallUrl: string | null;
   githubConfigured: boolean;
-  env: { anthropic: boolean; serp: boolean; google: boolean; siteguru: boolean; slack: boolean; inngest: boolean };
+  env: { anthropic: boolean; serp: boolean; google: boolean; slack: boolean; inngest: boolean };
 }) {
   return (
     <div>
@@ -144,7 +143,6 @@ function IntegrationRow({
 }
 
 const KEY_HELP: Record<Keyed, { label: string; where: string; env: string; multiline?: boolean }> = {
-  siteguru: { label: "SiteGuru API key", where: "SiteGuru → API access → create a key (needs a plan with MCP access).", env: "SITEGURU_API_KEY" },
   anthropic: { label: "Anthropic API key", where: "console.anthropic.com → API keys.", env: "ANTHROPIC_API_KEY" },
   gsc: {
     label: "Paste the whole JSON key file",

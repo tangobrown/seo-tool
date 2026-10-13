@@ -1,5 +1,7 @@
 # SiteGuru integration: findings (Phase 3)
 
+> **Retired 13 Oct 2026.** SiteGuru was replaced by Search Console + DataForSEO ([findings](search-console-dataforseo.md)) and its code was removed. This page is kept for reference.
+
 Checked on 4 Oct 2026 against the live SiteGuru MCP server, through an authenticated connection, plus SiteGuru's own docs ([MCP setup](https://www.siteguru.co/seo-academy/siteguru-mcp-setup)).
 
 ## Access method

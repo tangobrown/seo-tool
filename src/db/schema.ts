@@ -201,6 +201,7 @@ export const clients = pgTable(
     weights: jsonb("weights").$type<Record<string, number>>(),
     githubRepo: text("github_repo"),
     githubDefaultBranch: text("github_default_branch"),
+    /** History only: SiteGuru was retired on 13 Oct 2026. */
     siteguruSiteId: text("siteguru_site_id"),
     /** Search Console property, e.g. "sc-domain:example.co.uk" or "https://www.example.co.uk/". */
     gscProperty: text("gsc_property"),
@@ -231,7 +232,7 @@ export const clientConnections = pgTable(
     clientId: uuid("client_id")
       .notNull()
       .references(() => clients.id),
-    provider: text("provider").notNull(), // website | github | siteguru | gbp
+    provider: text("provider").notNull(), // website | github | gsc | gbp
     status: connectionStatus("status").notNull().default("pending"),
     externalId: text("external_id"),
     lastSuccessAt: ts("last_success_at"),
@@ -639,7 +640,7 @@ export type MonthlyReport = typeof monthlyReports.$inferSelect;
 export type Integration = typeof integrations.$inferSelect;
 export type ClientConnection = typeof clientConnections.$inferSelect;
 
-/** Raw SiteGuru detection inputs captured at each scan. Detection reads these, never live calls. */
+/** Raw detection inputs captured at each scan (Search Console, site audit, rankings; SiteGuru before 13 Oct 2026). Detection reads these, never live calls. The table keeps its original name. */
 export const siteguruSignals = pgTable(
   "siteguru_signals",
   {
@@ -648,7 +649,7 @@ export const siteguruSignals = pgTable(
       .notNull()
       .references(() => clients.id),
     capturedAt: ts("captured_at").notNull().defaultNow(),
-    /** "siteguru", or "gsc" for signals from Search Console + the DataForSEO site audit. */
+    /** "gsc" (Search Console + DataForSEO). "siteguru" rows are history from before 13 Oct 2026. */
     source: text("source").notNull().default("siteguru"),
     signals: jsonb("signals").$type<Record<string, unknown>>().notNull(),
   },

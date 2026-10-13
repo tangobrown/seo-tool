@@ -12,56 +12,39 @@ import { onlyKnownNumbers } from "@/domain/opportunities/text";
 import { familyOf, NEW_PAGE_TYPES, type DetectionInput, type ScoredCandidate, type Signals } from "@/domain/opportunities/types";
 import { anthropicConfigured, llmJson } from "@/integrations/anthropic";
 import { REC_TEXT_PROMPT_VERSION, REC_TEXT_SYSTEM, recTextPrompt, recTextSchema } from "@/integrations/anthropic/prompts/recommendations";
-import { siteguru } from "@/integrations/siteguru";
-import { toSignals } from "@/integrations/siteguru/map";
 import { audit } from "@/lib/audit";
 import { raiseAttention, resolveAttention } from "@/lib/attention";
 import { createApprovalBatch } from "./batches";
 import { latestAuditTodo } from "./dataforseo-runs";
 import { gscSignals, syncClientFromGsc } from "./gsc-sync";
 import { latestSerpResults } from "./serp";
-import { syncClientFromSiteguru } from "./siteguru-sync";
 
 type CandidatePayload = { service?: string | null; location?: string | null; newPage?: boolean; autoApproveKind?: string; promptVersion?: string };
 
-// ── Step 1: sync SiteGuru and capture detection signals ───────────────────────────
+// ── Step 1: sync Search Console and capture detection signals ──────────────────────
 
 /**
- * Fetches each signal family independently. A failed family is recorded and left out, so detection
- * runs on what we have and never mistakes "fetch failed" for "issue fixed".
+ * Search signals from Search Console, technical to-dos from the latest finished DataForSEO site
+ * audit, and the latest tracked local searches. A family with no data is left out, so detection
+ * never mistakes "no data" for "issue fixed".
  */
 export async function captureSignals(clientId: string): Promise<{ signalsId: string | null; errors: string[] }> {
   const [c] = await db.select().from(clients).where(eq(clients.id, clientId));
   if (!c) throw new Error(`Client ${clientId} not found`);
-  if (c.gscProperty) return captureGscSignals(c);
-  if (!c.siteguruSiteId) return { signalsId: null, errors: ["No Search Console property or SiteGuru site linked"] };
-  const site = c.siteguruSiteId;
+  if (!c.gscProperty) return { signalsId: null, errors: ["No Search Console property linked"] };
 
-  await syncClientFromSiteguru(clientId); // KPIs first (§10.1); throws if SiteGuru is down, so the step retries
-
-  const errors: string[] = [];
-  const attempt = async <T>(name: string, fn: () => Promise<T>): Promise<T | null> => {
-    try {
-      return await fn();
-    } catch (e) {
-      errors.push(`${name}: ${e instanceof Error ? e.message : String(e)}`);
-      return null;
-    }
+  await syncClientFromGsc(c.id); // KPIs first; throws if Search Console is down, so the step retries
+  const search = await gscSignals(c.gscProperty);
+  const todo = await latestAuditTodo(c.id);
+  const serp = await latestSerpResults(c.id);
+  const signals: Signals = {
+    ...search,
+    ...(todo ? { todo } : {}),
+    ...(serp.length ? { serp } : {}),
+    sources: { search: "gsc", audit: todo ? "dataforseo" : undefined },
   };
-  const [todo, lowHangingFruit, declining, cannibalization, overview, keywords] = await Promise.all([
-    attempt("todo", () => siteguru.todoList(site)),
-    attempt("low hanging fruit", () => siteguru.lowHangingFruit(site, { range: "last_90_days" })),
-    attempt("declining content", () => siteguru.decliningContent(site)),
-    attempt("cannibalization", () => siteguru.cannibalization(site, { range: "last_90_days" })),
-    attempt("traffic overview", () => siteguru.trafficOverview(site, { range: "last_30_days" })),
-    attempt("top keywords", () => siteguru.topKeywords(site, { range: "last_30_days" })),
-  ]);
-  const signals = toSignals({ todo, lowHangingFruit, declining, cannibalization, overview, keywords });
-  const [row] = await db
-    .insert(siteguruSignals)
-    .values({ clientId, signals: { ...signals, fetchErrors: errors } })
-    .returning({ id: siteguruSignals.id });
-  return { signalsId: row!.id, errors };
+  const [row] = await db.insert(siteguruSignals).values({ clientId: c.id, source: "gsc", signals }).returning({ id: siteguruSignals.id });
+  return { signalsId: row!.id, errors: [] };
 }
 
 // ── Step 2: detect → score → reconcile → select ───────────────────────────────
@@ -343,32 +326,3 @@ export async function autoApproveLowImpact(clientId: string, scanKey: string): P
 }
 
 export { impactLabel };
-
-/**
- * Search Console + DataForSEO path: search signals from Search Console, technical to-dos from the
- * latest finished site audit, and the latest tracked local searches. Clients still on SiteGuru for
- * audits (no DataForSEO audit yet) keep SiteGuru's to-do list during the switch-over.
- */
-async function captureGscSignals(c: typeof clients.$inferSelect): Promise<{ signalsId: string | null; errors: string[] }> {
-  await syncClientFromGsc(c.id); // KPIs first; throws if Search Console is down, so the step retries
-  const errors: string[] = [];
-  const search = await gscSignals(c.gscProperty!);
-  let todo = await latestAuditTodo(c.id);
-  let audit: "dataforseo" | "siteguru" | undefined = todo ? "dataforseo" : undefined;
-  if (!todo && c.siteguruSiteId) {
-    try {
-      const t = await siteguru.todoList(c.siteguruSiteId);
-      todo = toSignals({ todo: t }).todo ?? null;
-      audit = "siteguru";
-    } catch (e) {
-      errors.push(`todo: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
-  const serp = await latestSerpResults(c.id);
-  const signals: Signals = { ...search, ...(todo ? { todo } : {}), ...(serp.length ? { serp } : {}), sources: { search: "gsc", audit } };
-  const [row] = await db
-    .insert(siteguruSignals)
-    .values({ clientId: c.id, source: "gsc", signals: { ...signals, fetchErrors: errors } })
-    .returning({ id: siteguruSignals.id });
-  return { signalsId: row!.id, errors };
-}

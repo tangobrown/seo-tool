@@ -1,9 +1,10 @@
 // Provider interfaces. UI and route code never call provider SDKs directly.
 
-export type SiteguruSite = { id: string; domain: string };
+export type SearchProperty = { siteUrl: string; permissionLevel: string };
 
+/** Search performance data (Google Search Console). */
 export interface SEODataProvider {
-  listSites(): Promise<SiteguruSite[]>;
+  listSites(): Promise<SearchProperty[]>;
 }
 
 export type GbpLocation = { id: string; name: string; websiteUrl: string | null; address: string | null };

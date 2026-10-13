@@ -81,9 +81,8 @@ export default async function SettingsPage({
       </div>
     );
   } else if (tab === "integrations") {
-    const [rows, siteguruKey, anthropicKey, gscKey, dfsKey, psKey] = await Promise.all([
+    const [rows, anthropicKey, gscKey, dfsKey, psKey] = await Promise.all([
       getIntegrations(),
-      keySource("siteguru"),
       keySource("anthropic"),
       keySource("gsc"),
       keySource("dataforseo"),
@@ -91,7 +90,7 @@ export default async function SettingsPage({
     ]);
     body = (
       <IntegrationsSettings
-        keys={{ siteguru: siteguruKey, anthropic: anthropicKey, gsc: gscKey, dataforseo: dfsKey, pagespeed: psKey }}
+        keys={{ anthropic: anthropicKey, gsc: gscKey, dataforseo: dfsKey, pagespeed: psKey }}
         canStoreKeys={!!process.env.ENCRYPTION_KEY}
         githubInstallUrl={githubInstallUrl()}
         githubConfigured={githubConfigured()}
@@ -99,7 +98,6 @@ export default async function SettingsPage({
           anthropic: !!anthropicKey,
           serp: !!(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD),
           google: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
-          siteguru: !!siteguruKey,
           slack: !!ws.slackWebhookUrlEnc,
           inngest: !!(process.env.INNGEST_EVENT_KEY && process.env.INNGEST_SIGNING_KEY) || process.env.INNGEST_DEV === "1",
         }}

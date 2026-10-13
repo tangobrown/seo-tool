@@ -31,10 +31,10 @@ describe.skipIf(!hasDb)("monthly report and blog commitment", () => {
       .returning();
     clientId = c!.id;
 
-    // September and August month snapshots (UTC month starts, as the SiteGuru sync stores them).
+    // September and August month snapshots (UTC month starts, as the Search Console sync stores them).
     await db.insert(s.metricSnapshots).values([
-      { clientId, source: "siteguru", kind: "month", periodStart: new Date("2026-09-01T00:00:00Z"), periodEnd: new Date("2026-09-30T00:00:00Z"), metrics: { clicks: 900, impressions: 30000 } },
-      { clientId, source: "siteguru", kind: "month", periodStart: new Date("2026-08-01T00:00:00Z"), periodEnd: new Date("2026-08-31T00:00:00Z"), metrics: { clicks: 1000, impressions: 28000 } },
+      { clientId, source: "gsc", kind: "month", periodStart: new Date("2026-09-01T00:00:00Z"), periodEnd: new Date("2026-09-30T00:00:00Z"), metrics: { clicks: 900, impressions: 30000 } },
+      { clientId, source: "gsc", kind: "month", periodStart: new Date("2026-08-01T00:00:00Z"), periodEnd: new Date("2026-08-31T00:00:00Z"), metrics: { clicks: 1000, impressions: 28000 } },
     ]);
 
     // One piece of work that went live in September (London time), one in October.

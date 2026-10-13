@@ -1,12 +1,12 @@
 import { notFound } from "next/navigation";
 import { ClientSettings } from "@/components/client/ClientSettings";
-import { getClient, getClientConnections, getSourceComparison, getTiers } from "@/server/queries";
+import { getClient, getClientConnections, getTiers } from "@/server/queries";
 
 export default async function ClientSettingsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const data = await getClient(id);
   if (!data) notFound();
-  const [tiers, connections, compare] = await Promise.all([getTiers(), getClientConnections(id), getSourceComparison(id)]);
+  const [tiers, connections] = await Promise.all([getTiers(), getClientConnections(id)]);
   const c = data.client;
   return (
     <ClientSettings
@@ -35,7 +35,6 @@ export default async function ClientSettingsPage({ params }: { params: Promise<{
         onboarding: c.onboarding,
         createdAt: c.createdAt.toISOString(),
       }}
-      compare={compare}
       blog={{ planned: data.commitment?.planned ?? 0, committed: data.commitment?.committed ?? data.tier.postsPerMonth }}
       tiers={tiers.map((t) => ({ id: t.id, name: t.name, postsPerMonth: t.postsPerMonth, scanFrequency: t.scanFrequency, pricePence: t.pricePence }))}
       connections={connections.map((k) => ({

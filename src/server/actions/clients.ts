@@ -120,7 +120,7 @@ export async function createClient(input: z.input<typeof newClientSchema>): Prom
       })
       .returning();
     await tx.insert(clientConnections).values(
-      ["website", "github", "gsc", "siteguru", "gbp"].map((provider) => ({ clientId: c!.id, provider, status: "pending" as const })),
+      ["website", "github", "gsc", "gbp"].map((provider) => ({ clientId: c!.id, provider, status: "pending" as const })),
     );
     await audit({ actor: "operator", clientId: c!.id, entityType: "client", entityId: c!.id, event: "client.created", after: d }, tx);
     return c!;
@@ -189,7 +189,7 @@ export async function confirmAndActivate(clientId: string): Promise<ActionResult
   return { ok: true };
 }
 
-/** Re-run onboarding (e.g. after adding the site to SiteGuru or installing the GitHub App). */
+/** Re-run onboarding (e.g. after sharing Search Console with the app or installing the GitHub App). */
 export async function retryOnboarding(clientId: string): Promise<ActionResult> {
   await requireSession();
   if (!uuid.safeParse(clientId).success) return { ok: false, error: "Invalid request" };
@@ -226,26 +226,22 @@ async function startOnboarding(clientId: string, eventId: string): Promise<boole
   }
 }
 
-export async function setClientConnection(clientId: string, provider: "siteguru" | "gsc" | "gbp" | "github", externalId: string): Promise<ActionResult> {
+export async function setClientConnection(clientId: string, provider: "gsc" | "gbp" | "github", externalId: string): Promise<ActionResult> {
   await requireSession();
-  const p = z.object({ clientId: uuid, provider: z.enum(["siteguru", "gsc", "gbp", "github"]), externalId: z.string().trim().min(1).max(300) }).safeParse({ clientId, provider, externalId });
+  const p = z.object({ clientId: uuid, provider: z.enum(["gsc", "gbp", "github"]), externalId: z.string().trim().min(1).max(300) }).safeParse({ clientId, provider, externalId });
   if (!p.success) return { ok: false, error: "Invalid request" };
-  const col = { siteguru: "siteguruSiteId", gsc: "gscProperty", gbp: "gbpLocationId", github: "githubRepo" } as const;
+  const col = { gsc: "gscProperty", gbp: "gbpLocationId", github: "githubRepo" } as const;
   await db.update(clients).set({ [col[provider]]: externalId }).where(eq(clients.id, clientId));
-  // SiteGuru and Search Console are "pending" until the first sync succeeds; the others are confirmed by the operator choosing them.
-  const syncs = provider === "siteguru" || provider === "gsc";
+  // Search Console is "pending" until the first sync succeeds; the others are confirmed by the operator choosing them.
+  const syncs = provider === "gsc";
   const set = syncs ? { externalId, status: "pending" as const, lastError: null } : { externalId, status: "connected" as const, lastSuccessAt: new Date(), lastError: null };
   await db
     .insert(clientConnections)
     .values({ clientId, provider, ...set })
     .onConflictDoUpdate({ target: [clientConnections.clientId, clientConnections.provider], set });
   await audit({ actor: "operator", clientId, entityType: "client_connection", entityId: provider, event: "connection.set", after: { provider, externalId } });
-  if (provider === "siteguru") {
-    await resolveAttention(`siteguru_missing:${clientId}`);
-    // Pull data for the newly linked site straight away rather than waiting for 05:00.
-    await inngest.send({ name: EVENTS.siteguruSyncClient, data: { clientId }, id: `sg-link-${clientId}-${Date.now()}` }).catch((e) => console.error(e));
-  }
   if (provider === "gsc") {
+    await resolveAttention(`gsc_missing:${clientId}`);
     await inngest.send({ name: EVENTS.gscSyncClient, data: { clientId }, id: `gsc-link-${clientId}-${Date.now()}` }).catch((e) => console.error(e));
   }
   if (provider === "gbp") await resolveAttention(`gbp_match:${clientId}`);

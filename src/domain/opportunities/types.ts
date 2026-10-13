@@ -29,8 +29,8 @@ export type DetectionInput = {
 };
 
 export type Signals = {
-  /** Where the search data and the site audit came from, for evidence labels. Defaults to SiteGuru. */
-  sources?: { search?: "siteguru" | "gsc"; audit?: "siteguru" | "dataforseo" };
+  /** Where the search data and the site audit came from, for evidence labels. */
+  sources?: { search?: "gsc"; audit?: "dataforseo" };
   todo?: { checkName: string; severity: string; title: string; description?: string; affectedPages?: number | null; reportUrl?: string }[];
   /** Near-miss keywords over the last 90 days. */
   lowHangingFruit?: { keyword: string; path: string; clicks: number; impressions: number; avgPosition: number }[];

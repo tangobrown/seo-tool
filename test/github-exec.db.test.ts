@@ -89,7 +89,7 @@ describe.skipIf(!hasDb)("Claude Code execution contract", () => {
     const s = await import("@/db/schema");
     const opps = await db
       .insert(s.opportunities)
-      .values(titles.map((t, i) => ({ clientId, fingerprint: `${t}-${Date.now()}-${i}`, type: "metadata", category: "on_page" as const, title: t, proposedAction: `Do ${t}`, targetUrl: "/acai", evidence: [{ source: "siteguru" as const, metric: "position", value: 6 }], status: "approved" as const })))
+      .values(titles.map((t, i) => ({ clientId, fingerprint: `${t}-${Date.now()}-${i}`, type: "metadata", category: "on_page" as const, title: t, proposedAction: `Do ${t}`, targetUrl: "/acai", evidence: [{ source: "gsc" as const, metric: "position", value: 6 }], status: "approved" as const })))
       .returning();
     const [batch] = await db.insert(s.batches).values({ clientId, idempotencyKey: crypto.randomUUID(), status: "running", startsAt: new Date() }).returning();
     const execs = await db

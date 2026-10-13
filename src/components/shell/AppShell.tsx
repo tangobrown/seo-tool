@@ -196,7 +196,7 @@ export function AppShell(props: ShellProps) {
               </div>
             </div>
             <div className="hidden whitespace-nowrap text-[12px] text-subtle-2 md:block" suppressHydrationWarning>
-              {syncAt ? `Synced with SiteGuru ${now ? relativeTime(syncAt, now) : ""}` : "Not synced with SiteGuru yet"}
+              {syncAt ? `Synced with Search Console ${now ? relativeTime(syncAt, now) : ""}` : "Not synced with Search Console yet"}
             </div>
           </header>
           <div className="flex-1 overflow-y-auto" id="content-scroll">

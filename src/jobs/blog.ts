@@ -118,7 +118,7 @@ export const blogPlanOnActivation = inngest.createFunction(
   { id: "blog-plan-on-activation", triggers: [{ event: EVENTS.clientActivated }] },
   async ({ event, step }) => {
     const { clientId } = clientEvent.parse(event.data);
-    // Wait for the first scan to capture SiteGuru signals; topics come from them.
+    // Wait for the first scan to capture Search Console signals; topics come from them.
     await step.sleep("after-first-scan", "30m");
     await step.sendEvent("plan", { name: EVENTS.blogPlanClient, data: { clientId }, id: `blog-plan-${clientId}-${periodOf(new Date())}-activation` });
   },

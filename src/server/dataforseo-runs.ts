@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { clients, integrations, metricSnapshots, siteAudits, workspace } from "@/db/schema";
 import { auditToTodo } from "@/domain/audit";
@@ -79,7 +79,7 @@ export async function collectSiteAudit(auditId: string): Promise<"crawling" | "f
   const [snap] = await db
     .select({ metrics: metricSnapshots.metrics })
     .from(metricSnapshots)
-    .where(and(eq(metricSnapshots.clientId, a.clientId), inArray(metricSnapshots.source, ["gsc", "siteguru"]), eq(metricSnapshots.kind, "rolling30")))
+    .where(and(eq(metricSnapshots.clientId, a.clientId), eq(metricSnapshots.source, "gsc"), eq(metricSnapshots.kind, "rolling30")))
     .orderBy(desc(metricSnapshots.capturedAt))
     .limit(1);
   const base = c?.websiteUrl ?? `https://${c?.domain}`;

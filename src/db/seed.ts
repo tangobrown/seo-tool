@@ -115,7 +115,7 @@ function recPool(c: MockClient): Rec[] {
       why: "Crawlers waste time on dead ends and visitors leave when a link goes nowhere.",
       proposed: "Update 14 internal links in page components to point at live URLs. No redirects are added.",
       benefit: "Cleaner crawl and fewer lost visitors.",
-      evidence: [{ source: "siteguru", metric: "broken internal links", value: 14, note: "found on 6 pages" }],
+      evidence: [{ source: "dataforseo", metric: "broken internal links", value: 14, note: "found on 6 pages" }],
     },
     {
       category: "content", impact: "high", type: "blog_content", title: `Publish blog post targeting “${kw}”`,
@@ -125,7 +125,7 @@ function recPool(c: MockClient): Rec[] {
       proposed: "Add a new blog post at /blog with the drafted guide, linked from the relevant service page.",
       benefit: "A new entry point from search for a relevant, commercial query.",
       evidence: [
-        { source: "siteguru", metric: "monthly searches", value: "1,900", note: kw },
+        { source: "gsc", metric: "monthly searches", value: "1,900", note: kw },
         { source: "serp", metric: "client position", value: "not in top 100", note: kw },
       ],
     },
@@ -137,8 +137,8 @@ function recPool(c: MockClient): Rec[] {
       proposed: "Update the Metadata API title on 6 pages to under 60 characters, keyword first.",
       benefit: "Better click-through rate from existing impressions.",
       evidence: [
-        { source: "siteguru", metric: "titles too long", value: 6 },
-        { source: "siteguru", metric: "impressions/month on these pages", value: "4,200", period: "last 30 days" },
+        { source: "dataforseo", metric: "titles too long", value: 6 },
+        { source: "gsc", metric: "impressions/month on these pages", value: "4,200", period: "last 30 days" },
       ],
     },
     {
@@ -148,7 +148,7 @@ function recPool(c: MockClient): Rec[] {
       why: "Large images slow mobile pages, which hurts rankings and conversions.",
       proposed: "Convert 23 images to WebP and serve them with next/image.",
       benefit: "Faster mobile pages.",
-      evidence: [{ source: "siteguru", metric: "mobile load time", value: "4.1s" }, { source: "crawl", metric: "images over 300 KB", value: 23 }],
+      evidence: [{ source: "dataforseo", metric: "mobile load time", value: "4.1s" }, { source: "crawl", metric: "images over 300 KB", value: 23 }],
     },
     {
       category: "links", impact: "medium", type: "link_opportunity", title: "Reclaim 3 unlinked brand mentions",
@@ -157,7 +157,7 @@ function recPool(c: MockClient): Rec[] {
       why: "Mentions without links pass no authority.",
       proposed: "Send three short outreach emails (drafts provided).",
       benefit: "Up to three new relevant backlinks.",
-      evidence: [{ source: "siteguru", metric: "unlinked mentions", value: 3 }],
+      evidence: [{ source: "serp", metric: "unlinked mentions", value: 3 }],
     },
     {
       category: "content", impact: "medium", type: "existing_page_optimisation", title: `Refresh “${c.oldPost}”`,
@@ -166,7 +166,7 @@ function recPool(c: MockClient): Rec[] {
       why: "The post is losing clicks to fresher competitor content.",
       proposed: "Update outdated sections and add a short FAQ block with FAQPage schema.",
       benefit: "Recover lost traffic on an established page.",
-      evidence: [{ source: "siteguru", metric: "clicks change", value: "-38%", period: "since April" }],
+      evidence: [{ source: "gsc", metric: "clicks change", value: "-38%", period: "since April" }],
     },
     {
       category: "on_page", impact: "medium", type: "internal_linking", title: `Add internal links to the ${c.service.toLowerCase()} page`,
@@ -177,7 +177,7 @@ function recPool(c: MockClient): Rec[] {
       benefit: "Stronger ranking signals for a priority service page.",
       evidence: [
         { source: "crawl", metric: "internal links in", value: 2 },
-        { source: "siteguru", metric: "position", value: 6, note: c.kws[1] },
+        { source: "gsc", metric: "position", value: 6, note: c.kws[1] },
       ],
     },
     {
@@ -187,7 +187,7 @@ function recPool(c: MockClient): Rec[] {
       why: "The page already has FAQs but no structured data.",
       proposed: "Add FAQPage JSON-LD for the existing questions.",
       benefit: "Eligibility for rich results.",
-      evidence: [{ source: "siteguru", metric: "structured data", value: "missing" }],
+      evidence: [{ source: "dataforseo", metric: "structured data", value: "missing" }],
     },
     {
       category: "technical", impact: "low", type: "technical_issue", title: "Add missing alt text to 41 images",
@@ -196,7 +196,7 @@ function recPool(c: MockClient): Rec[] {
       why: "Images without alt text are invisible to screen readers and image search.",
       proposed: "Add descriptive alt text to 41 images.",
       benefit: "Accessibility and image search visibility.",
-      evidence: [{ source: "siteguru", metric: "images missing alt", value: 41 }],
+      evidence: [{ source: "dataforseo", metric: "images missing alt", value: 41 }],
     },
     {
       category: "technical", impact: "high", type: "technical_issue", title: "Redirect www to non-www",
@@ -265,7 +265,9 @@ async function main() {
   const tierByName = Object.fromEntries(tierRows.map((t) => [t.name, t]));
 
   await db.insert(s.integrations).values([
-    { provider: "siteguru", status: "connected", lastSuccessAt: new Date(now.getTime() - 12 * 60_000) },
+    { provider: "gsc", status: "connected", lastSuccessAt: new Date(now.getTime() - 12 * 60_000) },
+    { provider: "dataforseo", status: "not_connected" },
+    { provider: "pagespeed", status: "not_connected" },
     { provider: "github", status: "not_connected" },
     { provider: "gbp", status: "not_connected" },
     { provider: "serp", status: "not_connected" },
@@ -299,7 +301,7 @@ async function main() {
         reviewBlogPosts: true,
         githubRepo: `example-agency/${c.domain.split(".")[0]}`,
         githubDefaultBranch: "main",
-        siteguruSiteId: c.domain,
+        gscProperty: `sc-domain:${c.domain}`,
         createdAt: new Date(now.getTime() - 200 * 86400_000),
       })
       .returning();
@@ -308,7 +310,7 @@ async function main() {
     await db.insert(s.clientConnections).values([
       { clientId: client.id, provider: "website", status: "connected", externalId: `https://${c.domain}`, lastSuccessAt: now },
       { clientId: client.id, provider: "github", status: "connected", externalId: client.githubRepo, lastSuccessAt: now },
-      { clientId: client.id, provider: "siteguru", status: "connected", externalId: c.domain, lastSuccessAt: new Date(now.getTime() - 12 * 60_000) },
+      { clientId: client.id, provider: "gsc", status: "connected", externalId: `sc-domain:${c.domain}`, lastSuccessAt: new Date(now.getTime() - 12 * 60_000) },
       { clientId: client.id, provider: "gbp", status: "not_connected" },
     ]);
 
@@ -436,7 +438,7 @@ async function main() {
       const end = monthStart(thisMonth.getUTCFullYear(), thisMonth.getUTCMonth() - 11 + i);
       await db.insert(s.metricSnapshots).values({
         clientId: client.id,
-        source: "siteguru",
+        source: "gsc",
         kind: "month",
         periodStart: start,
         periodEnd: end,
@@ -452,7 +454,7 @@ async function main() {
     const pos = Math.round((9 + r(1) * 5) * 10) / 10;
     await db.insert(s.metricSnapshots).values({
       clientId: client.id,
-      source: "siteguru",
+      source: "gsc",
       kind: "rolling30",
       periodStart: new Date(now.getTime() - 30 * 86400_000),
       periodEnd: now,
@@ -580,7 +582,7 @@ async function main() {
       onboarding: {
         website: { status: "ok", message: "Reachable at https://exeterheating.co.uk" },
         github: { status: "ok", message: "Next.js repo, default branch main" },
-        siteguru: { status: "failed", message: "No SiteGuru site matches exeterheating.co.uk" },
+        gsc: { status: "failed", message: "No Search Console property shared for exeterheating.co.uk" },
         gbp: { status: "skipped", message: "Google Business Profile not connected" },
         crawl: { status: "ok", message: "42 pages crawled" },
         discovery: { status: "ok", message: "6 services and 4 locations found" },
@@ -590,7 +592,7 @@ async function main() {
   await db.insert(s.clientConnections).values([
     { clientId: exeter!.id, provider: "website", status: "connected", externalId: "https://exeterheating.co.uk", lastSuccessAt: now },
     { clientId: exeter!.id, provider: "github", status: "connected", externalId: "example-agency/exeter-heating", lastSuccessAt: now },
-    { clientId: exeter!.id, provider: "siteguru", status: "not_found", lastFailureAt: now, lastError: "No matching site" },
+    { clientId: exeter!.id, provider: "gsc", status: "not_found", lastFailureAt: now, lastError: "Not shared with the service account yet" },
     { clientId: exeter!.id, provider: "gbp", status: "not_connected" },
   ]);
   await db.insert(s.attentionItems).values([
@@ -605,10 +607,10 @@ async function main() {
     {
       clientId: exeter!.id,
       kind: "integration",
-      title: "Add exeterheating.co.uk to SiteGuru",
-      detail: "No SiteGuru site matches this domain. Add it in SiteGuru, then retry the connection.",
+      title: "Share exeterheating.co.uk’s Search Console with the app",
+      detail: "In Search Console, open Settings → Users and permissions → Add user and enter the service account email. Then choose the property in the client’s Connections.",
       link: `/clients/${exeter!.id}/settings`,
-      dedupeKey: `siteguru_missing:${exeter!.id}`,
+      dedupeKey: `gsc_missing:${exeter!.id}`,
     },
   ]);
 

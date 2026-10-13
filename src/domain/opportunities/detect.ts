@@ -19,10 +19,10 @@ function plural(count: number, one: string, many = `${one}s`) {
 
 /** Evidence source labels follow the provider that supplied the data. */
 function searchSrc(input: DetectionInput) {
-  return input.signals.sources?.search ?? "siteguru";
+  return input.signals.sources?.search ?? "gsc";
 }
 function auditSrc(input: DetectionInput) {
-  return input.signals.sources?.audit ?? "siteguru";
+  return input.signals.sources?.audit ?? "dataforseo";
 }
 
 function isCommercial(path: string, pages: DetectionInput["pages"]): boolean {
@@ -32,7 +32,7 @@ function isCommercial(path: string, pages: DetectionInput["pages"]): boolean {
   return !/^\/(blog|news|articles|guides)\//i.test(path);
 }
 
-// ── SiteGuru to-do list → technical / on-page fixes ─────────────────────────────
+// ── Site audit to-do list → technical / on-page fixes ─────────────────────────────
 
 type TodoRule = Omit<Candidate, "evidence" | "family" | "severity" | "description" | "title"> & {
   title: (pages: number) => string;

@@ -50,7 +50,7 @@ Everything else happens in the background. The app only asks for attention when 
 | Code execution | **Claude Code** (not Codex), running in **GitHub Actions** on each client repo and dispatched by our app. |
 | Approval flow | **Tapping Approve on a selection creates a batch** that starts after a short **undo window** (default 2 min, configurable). There is no separate "run" button. |
 | PRs | **One PR per batch**, with **one commit per recommendation**. Never auto-merge. |
-| SEO data | **Google Search Console** (direct, service account) for clicks, impressions and searches, plus **DataForSEO** for the site audit and local rankings. **SiteGuru** remains only for clients without Search Console linked, and is retired once the numbers match. *(Changed 13 Oct 2026 by the operator; was SiteGuru-only. See §9.2a.)* No GA4 integration in the MVP. |
+| SEO data | **Google Search Console** (direct, service account) for clicks, impressions and searches, plus **DataForSEO** for the site audit and local rankings. **SiteGuru was retired on 13 Oct 2026** (subscription cancelled by the operator); its past monthly figures are kept as history. *(See §9.2a.)* No GA4 integration in the MVP. |
 | Local SEO | **Localo is dropped.** Local data comes from the **GBP API** (profile, performance, reviews) plus a **SERP provider** (local pack / Maps rankings for priority services in each served town). |
 | Client websites | All clients are **Next.js sites in GitHub**. There is no CMS integration. |
 | Blog posts | The tier's posts per month is a **promise to the client**: exactly N posts every month. Each topic must still be backed by evidence (see §10.6). |
@@ -533,10 +533,10 @@ Run as an Inngest function. Each step is recorded in `clients.onboarding`. If a 
 - **Search Console** (`src/integrations/gsc`): a Google Cloud service account, added as a user on each client's property. Daily sync at 05:15: last 30 days vs the 30 before, top pages and keywords, and every **complete** calendar month in the last 16 months (a month counts only once Google has reported its last day). Scan signals (near misses, competing pages, declining pages, top pages, keywords) are computed in code from Search Console rows (`src/domain/gsc-signals.ts`).
 - **Site audit** (DataForSEO On-Page, basic crawl, capped at 500 pages): started by each scan, collected when finished, mapped to the same to-do checks the rules already use (`src/domain/audit.ts`). Mobile speed comes from the free PageSpeed Insights API for the homepage and top pages.
 - **Rankings** (DataForSEO SERP, standard queue): see §9.4.
-- A client with a Search Console property uses this path; otherwise SiteGuru (§9.2). Reads prefer Search Console snapshots over SiteGuru ones. Client Settings → Connections shows both sources' 30-day clicks side by side during the switch-over.
+- A client needs a Search Console property linked to get search data and search-based recommendations. Monthly history prefers Search Console figures and falls back to SiteGuru months recorded before the switch.
 - `report.monthly` runs daily on the 1st–5th and waits until Search Console has the whole month; on the 5th it uses the latest 30 days instead, labelled with their dates (§12.1).
 
-### 9.2 SiteGuru (`SEODataProvider`)
+### 9.2 SiteGuru (`SEODataProvider`) — retired 13 Oct 2026, kept for reference
 
 SiteGuru is the primary SEO data source. **First task of Phase 3:** confirm how it can be accessed programmatically. It exposes an MCP server at `https://mcp.siteguru.co/mcp`; check whether a REST API also exists, how authentication works, and what the rate limits are. Then build the provider against whichever is more reliable.
 
@@ -822,7 +822,6 @@ Unsupported or high-risk changes are always `manual_action_required`, shown as a
 | `batch.dispatch` | Event | §11.1 |
 | `github.reconcile` | Every 10 min | §11.2 |
 | `gbp.verify` | Every 6 h | Pending GBP changes |
-| `siteguru.sync.daily` | Daily 05:00 | Refreshes KPIs for the dashboard and Reports tab (SiteGuru clients) |
 | `gsc.sync.daily` | Daily 05:15 | Search Console KPIs and monthly history (§9.2a) |
 | `report.monthly` | 1st–5th of month, 07:00 | For each active client with "Include in monthly report" on, once the month's Search Console data is complete (the 5th at the latest) |
 | `blog.plan` | 1st of month, 08:00 | §10.6 |
@@ -877,7 +876,6 @@ INNGEST_EVENT_KEY
 INNGEST_SIGNING_KEY
 ANTHROPIC_API_KEY
 ANTHROPIC_MODEL
-SITEGURU_API_KEY                   or MCP credentials, per Phase 3 findings
 GITHUB_APP_ID
 GITHUB_APP_SLUG
 GITHUB_APP_PRIVATE_KEY

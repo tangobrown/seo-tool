@@ -1,6 +1,6 @@
 // Search Console path against Postgres with a fake Google API: daily sync (KPIs + complete months
 // only), signals for a scan, detection evidence labelled "Search Console", and reads preferring
-// Search Console over SiteGuru.
+// Search Console over SiteGuru history.
 import { generateKeyPairSync } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -85,7 +85,7 @@ describe.skipIf(!hasDb)("Search Console sync and signals", () => {
     expect(conn).toMatchObject({ provider: "gsc", status: "connected" });
   });
 
-  it("prefers Search Console over SiteGuru for the month and the Reports tab", async () => {
+  it("prefers Search Console over older SiteGuru history for the month and the Reports tab", async () => {
     const { monthMetrics } = await import("@/server/reports");
     const { getReportsOverview } = await import("@/server/queries");
     expect((await monthMetrics(clientId, "2026-09"))?.clicks).toBe(300);

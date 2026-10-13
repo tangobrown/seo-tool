@@ -6,6 +6,5 @@ import { deploymentVerify, githubBatch, githubReconcile } from "./github";
 import { clientOnboard } from "./onboard";
 import { reportMonthly } from "./reports";
 import { clientScan, scanOnActivation, scanSchedule } from "./scan";
-import { siteguruSyncClient, siteguruSyncDaily } from "./siteguru";
 
-export const functions = [batchDispatch, batchSweep, fakeExecutor, clientOnboard, siteguruSyncDaily, siteguruSyncClient, clientScan, scanSchedule, scanOnActivation, githubBatch, deploymentVerify, githubReconcile, reportMonthly, blogPlanClient, blogPlanMonthly, blogDraftClient, blogDraftWeekly, blogCommitmentCheck, blogPlanOnActivation, gscSyncDaily, gscSyncClient];
+export const functions = [batchDispatch, batchSweep, fakeExecutor, clientOnboard, clientScan, scanSchedule, scanOnActivation, githubBatch, deploymentVerify, githubReconcile, reportMonthly, blogPlanClient, blogPlanMonthly, blogDraftClient, blogDraftWeekly, blogCommitmentCheck, blogPlanOnActivation, gscSyncDaily, gscSyncClient];

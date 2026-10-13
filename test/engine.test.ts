@@ -11,7 +11,7 @@ import { isoWeek, isScanDue, londonParts } from "@/domain/schedule";
 
 const cfg = DEFAULT_SCORING;
 
-// Trimmed from real SiteGuru responses for projuice.co.uk (4 Oct 2026).
+// Signals trimmed from real data for projuice.co.uk (4 Oct 2026). To-dos use the site-audit check names.
 const input: DetectionInput = {
   client: {
     id: "00000000-0000-0000-0000-000000000001",
@@ -54,7 +54,7 @@ describe("detection", () => {
   const { candidates, evaluated } = detect(input);
   const keys = candidates.map((c) => `${c.type}:${c.actionKey}:${c.targetUrl ?? ""}`);
 
-  it("maps actionable SiteGuru to-dos and skips vague ones", () => {
+  it("maps actionable site-audit to-dos and skips vague ones", () => {
     expect(keys).toContain("technical_issue:sitemap:/sitemap.xml");
     expect(keys).toContain("technical_issue:broken_links:");
     expect(keys.some((k) => k.includes("similar"))).toBe(false);

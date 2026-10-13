@@ -6,7 +6,6 @@ import { decrypt, encrypt } from "@/lib/crypto";
 
 /** Providers whose API key can be entered in Settings → Integrations, and the env var each falls back to. */
 export const KEYED_PROVIDERS = {
-  siteguru: "SITEGURU_API_KEY",
   anthropic: "ANTHROPIC_API_KEY",
   /** The Google Cloud service account's JSON key file, pasted whole. */
   gsc: "GOOGLE_SERVICE_ACCOUNT_JSON",

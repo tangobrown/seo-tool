@@ -7,7 +7,6 @@ export const EVENTS = {
   fakeExecutorStart: "fake-executor.start",
   clientOnboard: "client.onboard",
   clientActivated: "client.activated",
-  siteguruSyncClient: "siteguru.sync.client",
   gscSyncClient: "gsc.sync.client",
   serpTrackClient: "serp.track.client",
   clientScan: "client.scan",
