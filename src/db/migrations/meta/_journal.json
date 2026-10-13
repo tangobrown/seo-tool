@@ -29,6 +29,13 @@
       "when": 1791116478944,
       "tag": "0003_opportunity_engine",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791901708704,
+      "tag": "0004_search_console_dataforseo",
+      "breakpoints": true
     }
   ]
 }

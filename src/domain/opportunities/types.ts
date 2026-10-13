@@ -29,6 +29,8 @@ export type DetectionInput = {
 };
 
 export type Signals = {
+  /** Where the search data and the site audit came from, for evidence labels. Defaults to SiteGuru. */
+  sources?: { search?: "siteguru" | "gsc"; audit?: "siteguru" | "dataforseo" };
   todo?: { checkName: string; severity: string; title: string; description?: string; affectedPages?: number | null; reportUrl?: string }[];
   /** Near-miss keywords over the last 90 days. */
   lowHangingFruit?: { keyword: string; path: string; clicks: number; impressions: number; avgPosition: number }[];
@@ -39,10 +41,12 @@ export type Signals = {
   topPages?: { path: string; clicks: number; impressions: number; avgPosition: number }[];
   /** Top keywords over the last 30 days, for demand evidence. */
   keywords?: { keyword: string; clicks: number; impressions: number; position: number | null }[];
+  /** Tracked Google searches (service × town) with organic and map positions, from DataForSEO. */
+  serp?: import("../serp").SerpResult[];
 };
 
 /** Which signal families were fetched this scan. Only these can mark existing items as missed. */
-export type SignalFamily = "todo" | "lowHangingFruit" | "declining" | "cannibalization" | "topPages" | "pages";
+export type SignalFamily = "todo" | "lowHangingFruit" | "declining" | "cannibalization" | "topPages" | "pages" | "serp";
 
 export type Candidate = {
   type: string;
@@ -103,7 +107,8 @@ export function familyOf(actionKey: string | null): SignalFamily | null {
   if (actionKey === "refresh") return "declining";
   if (actionKey === "cannibalisation") return "cannibalization";
   if (actionKey === "ctr") return "topPages";
+  if (actionKey.startsWith("map_pack:") || actionKey.startsWith("serp_rank:")) return "serp";
   if (actionKey === "links_in" || actionKey.startsWith("service:") || actionKey.startsWith("location:")) return "pages";
-  if (["sitemap", "indexability", "canonicals", "broken_links", "internal_redirects", "page_speed", "alt_text", "schema", "og_tags", "orphans"].includes(actionKey)) return "todo";
+  if (["sitemap", "indexability", "canonicals", "broken_links", "internal_redirects", "page_speed", "alt_text", "schema", "og_tags", "orphans", "titles", "descriptions", "h1"].includes(actionKey)) return "todo";
   return null;
 }

@@ -45,9 +45,9 @@ export async function blogPostsForPeriod(clientId: string, period: string) {
 // ── Planning (1st of the month, §10.6) ─────────────────────────────────────────
 
 /** Real demand: the latest stored SiteGuru keywords and low-hanging-fruit queries, strongest first. */
-async function demandKeywords(clientId: string): Promise<DemandKeyword[]> {
+async function demandKeywords(clientId: string): Promise<{ keywords: DemandKeyword[]; source: "siteguru" | "gsc" }> {
   const [row] = await db
-    .select({ signals: siteguruSignals.signals })
+    .select({ signals: siteguruSignals.signals, source: siteguruSignals.source })
     .from(siteguruSignals)
     .where(eq(siteguruSignals.clientId, clientId))
     .orderBy(desc(siteguruSignals.capturedAt))
@@ -61,7 +61,7 @@ async function demandKeywords(clientId: string): Promise<DemandKeyword[]> {
   };
   for (const k of s.keywords ?? []) add(k.keyword, k.impressions, k.position, "last 30 days");
   for (const k of s.lowHangingFruit ?? []) add(k.keyword, k.impressions, k.avgPosition, "last 90 days");
-  return [...byKw.values()];
+  return { keywords: [...byKw.values()], source: row?.source === "gsc" ? "gsc" : "siteguru" };
 }
 
 const QUESTION_START = /^(how|what|why|when|where|which|who|can|does|do|is|are|should|will)\b/i;
@@ -110,8 +110,9 @@ export async function planBlogPosts(clientId: string, period: string): Promise<P
   const inventory = await db.select({ path: pages.path, title: pages.title }).from(pages).where(eq(pages.clientId, clientId));
   const existingTitles = inventory.map((p) => p.title ?? "").filter(Boolean);
 
+  const demandData = await demandKeywords(clientId);
   const candidates = blogTopicCandidates({
-    keywords: (await demandKeywords(clientId)).filter((k) => !usedKw.has(k.keyword.toLowerCase())),
+    keywords: demandData.keywords.filter((k) => !usedKw.has(k.keyword.toLowerCase())),
     services: c.services,
     locations: c.locations,
     clientKeywords: c.keywords,
@@ -162,8 +163,8 @@ export async function planBlogPosts(clientId: string, period: string): Promise<P
     const d = demand.get(tp.keyword)!;
     const slug = slugify(tp.keyword);
     const evidence: EvidenceItem[] = [
-      { source: "siteguru", metric: "impressions", value: d.impressions, period: d.period, note: `Google searches for “${d.keyword}” that showed the site` },
-      ...(d.position != null ? [{ source: "siteguru" as const, metric: "average position", value: Math.round(d.position * 10) / 10, period: d.period }] : []),
+      { source: demandData.source, metric: "impressions", value: d.impressions, period: d.period, note: `Google searches for “${d.keyword}” that showed the site` },
+      ...(d.position != null ? [{ source: demandData.source, metric: "average position", value: Math.round(d.position * 10) / 10, period: d.period }] : []),
     ];
     const payload: BlogPayload = { period, blogState: "planned", topic: tp, promptVersion, newPage: true };
     const res = await db
@@ -201,7 +202,7 @@ export async function planBlogPosts(clientId: string, period: string): Promise<P
       kind: "blog_commitment",
       clientId,
       title: `Only ${planned} of ${committed} blog topics found for ${c.name}`,
-      detail: "There isn’t enough real search demand in SiteGuru to plan every post this month. Add target keywords in the client’s settings, then tap Plan blog posts.",
+      detail: "There isn’t enough real search demand in the client’s search data to plan every post this month. Add target keywords in the client’s settings, then tap Plan blog posts.",
       link: `/clients/${clientId}/settings`,
     });
   } else {

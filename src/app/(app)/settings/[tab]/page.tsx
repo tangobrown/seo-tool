@@ -81,10 +81,17 @@ export default async function SettingsPage({
       </div>
     );
   } else if (tab === "integrations") {
-    const [rows, siteguruKey, anthropicKey] = await Promise.all([getIntegrations(), keySource("siteguru"), keySource("anthropic")]);
+    const [rows, siteguruKey, anthropicKey, gscKey, dfsKey, psKey] = await Promise.all([
+      getIntegrations(),
+      keySource("siteguru"),
+      keySource("anthropic"),
+      keySource("gsc"),
+      keySource("dataforseo"),
+      keySource("pagespeed"),
+    ]);
     body = (
       <IntegrationsSettings
-        keys={{ siteguru: siteguruKey, anthropic: anthropicKey }}
+        keys={{ siteguru: siteguruKey, anthropic: anthropicKey, gsc: gscKey, dataforseo: dfsKey, pagespeed: psKey }}
         canStoreKeys={!!process.env.ENCRYPTION_KEY}
         githubInstallUrl={githubInstallUrl()}
         githubConfigured={githubConfigured()}

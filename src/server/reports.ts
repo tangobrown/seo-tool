@@ -17,18 +17,23 @@ function utcMonthStart(period: string) {
   return new Date(Date.UTC(y, m - 1, 1));
 }
 
-async function monthMetrics(clientId: string, period: string): Promise<SiteMetrics | null> {
+const preferGsc = sql`case when ${metricSnapshots.source} = 'gsc' then 0 else 1 end`;
+
+/** A complete calendar month: Search Console's figure when there is one, SiteGuru's otherwise. */
+export async function monthMetrics(clientId: string, period: string): Promise<SiteMetrics | null> {
   const [row] = await db
     .select({ metrics: metricSnapshots.metrics })
     .from(metricSnapshots)
     .where(
       and(
         eq(metricSnapshots.clientId, clientId),
-        eq(metricSnapshots.source, "siteguru"),
+        inArray(metricSnapshots.source, ["gsc", "siteguru"]),
         eq(metricSnapshots.kind, "month"),
         eq(metricSnapshots.periodStart, utcMonthStart(period)),
       ),
-    );
+    )
+    .orderBy(preferGsc)
+    .limit(1);
   return row?.metrics ?? null;
 }
 
@@ -52,8 +57,8 @@ export async function reportMetrics(clientId: string, period: string): Promise<R
   const [rolling] = await db
     .select()
     .from(metricSnapshots)
-    .where(and(eq(metricSnapshots.clientId, clientId), eq(metricSnapshots.source, "siteguru"), eq(metricSnapshots.kind, "rolling30")))
-    .orderBy(desc(metricSnapshots.capturedAt))
+    .where(and(eq(metricSnapshots.clientId, clientId), inArray(metricSnapshots.source, ["gsc", "siteguru"]), eq(metricSnapshots.kind, "rolling30")))
+    .orderBy(preferGsc, desc(metricSnapshots.capturedAt))
     .limit(1);
   const m = rolling?.metrics;
   if (!rolling || !m || (m.clicks == null && m.impressions == null)) return null;

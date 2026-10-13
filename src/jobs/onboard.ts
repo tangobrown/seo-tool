@@ -8,12 +8,16 @@ import { anthropicConfigured, llmJson } from "@/integrations/anthropic";
 import { classifyPrompt, DISCOVERY_PROMPT_VERSION, DISCOVERY_SYSTEM, discoveryPrompt, discoverySchema, pageTypeSchema } from "@/integrations/anthropic/prompts/discovery";
 import { github, githubConfigured } from "@/integrations/github";
 import { CLIENT_REPO_TEMPLATES } from "@/integrations/github/templates.generated";
+import { matchGscProperty } from "@/domain/gsc-signals";
+import { gsc, gscServiceAccountEmail } from "@/integrations/gsc";
+import { getProviderKey } from "@/integrations/keys";
 import { siteguru, siteguruConfigured } from "@/integrations/siteguru";
 import { matchSite } from "@/integrations/siteguru/map";
 import { notify, appLink } from "@/integrations/slack";
 import { finishRun, startRun } from "@/integrations/run";
 import { checkWebsite, crawlSite } from "@/integrations/website";
 import { audit } from "@/lib/audit";
+import { syncClientFromGsc } from "@/server/gsc-sync";
 import { syncClientFromSiteguru } from "@/server/siteguru-sync";
 import { raiseAttention, resolveAttention } from "@/lib/attention";
 import { EVENTS, inngest } from "./client";
@@ -171,6 +175,8 @@ export const clientOnboard = inngest.createFunction(
         if (c.siteguruSiteId) return { status: "ok", message: `Linked to ${c.siteguruSiteId}` };
         if (!(await siteguruConfigured())) {
           await setConnection(clientId, "siteguru", { status: "not_connected", lastError: "No SiteGuru API key" });
+          // With Search Console set up, SiteGuru is optional.
+          if (await getProviderKey("gsc")) return { status: "skipped", message: "Not used (Search Console is set up)" };
           await raiseAttention({ dedupeKey: "siteguru_key_missing", kind: "integration", title: "Add your SiteGuru API key", detail: "Create a key on SiteGuru’s API access page and paste it in Settings → Integrations.", link: "/settings/integrations" });
           return { status: "skipped", message: "No SiteGuru API key yet" };
         }
@@ -192,6 +198,33 @@ export const clientOnboard = inngest.createFunction(
         await resolveAttention(`siteguru_missing:${clientId}`);
         const gsc = site.data_sources?.search_console?.connected;
         return { status: "ok", message: `Matched ${site.domain}${gsc === false ? " (Search Console not connected in SiteGuru)" : ""}` };
+      }),
+    );
+
+    // 4b. Search Console match: the property shared with our service account for this domain.
+    await step.run("gsc", () =>
+      recorded(clientId, "gsc", async () => {
+        const c = await loadClient(clientId);
+        if (c.gscProperty) return { status: "ok", message: `Linked to ${c.gscProperty}` };
+        if (!(await getProviderKey("gsc"))) return { status: "skipped", message: "No Google service account yet (Settings → Integrations)" };
+        const property = matchGscProperty(await gsc.listSites(), c.domain);
+        const email = await gscServiceAccountEmail();
+        if (!property) {
+          await setConnection(clientId, "gsc", { status: "not_found", lastFailureAt: new Date(), lastError: `Not shared with ${email ?? "the service account"} yet` });
+          await raiseAttention({
+            dedupeKey: `gsc_missing:${clientId}`,
+            kind: "integration",
+            clientId,
+            title: `Share ${c.domain}’s Search Console with the app`,
+            detail: `In Search Console, open Settings → Users and permissions → Add user, enter ${email ?? "the service account email"} with Restricted permission. Then choose the property in the client’s Connections.`,
+            link: `/clients/${clientId}/settings`,
+          });
+          return { status: "failed", message: `No Search Console property shared for ${c.domain}` };
+        }
+        await db.update(clients).set({ gscProperty: property }).where(eq(clients.id, clientId));
+        await setConnection(clientId, "gsc", { status: "pending", externalId: property, lastError: null });
+        await resolveAttention(`gsc_missing:${clientId}`);
+        return { status: "ok", message: `Matched ${property}` };
       }),
     );
 
@@ -291,7 +324,13 @@ export const clientOnboard = inngest.createFunction(
       }),
     );
 
-    // 8. First SiteGuru sync.
+    // 8. First Search Console sync (KPIs and 16 months of history), then SiteGuru.
+    await step.run("gsc-sync", () =>
+      recorded(clientId, "gsc_sync", async () => {
+        const out = await syncClientFromGsc(clientId);
+        return { status: out.status === "synced" ? "ok" : "skipped", message: out.status === "synced" ? `${out.message}: ${out.months} months of history` : out.message };
+      }),
+    );
     await step.run("siteguru-sync", () =>
       recorded(clientId, "siteguru_sync", async () => {
         const out = await syncClientFromSiteguru(clientId);

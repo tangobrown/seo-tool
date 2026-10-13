@@ -98,7 +98,7 @@ export const gbpChangeStatus = pgEnum("gbp_change_status", [
   "failed",
   "manual_action_required",
 ]);
-export const metricSource = pgEnum("metric_source", ["siteguru", "gbp", "serp"]);
+export const metricSource = pgEnum("metric_source", ["siteguru", "gsc", "gbp", "serp"]);
 export const pageType = pgEnum("page_type", [
   "homepage",
   "service",
@@ -134,6 +134,8 @@ export const workspace = pgTable("workspace", {
   scanDay: integer("scan_day").notNull().default(1), // ISO weekday, 1 = Monday
   scanTime: text("scan_time").notNull().default("06:00"),
   deferDays: integer("defer_days").notNull().default(28),
+  /** Tracked Google searches per client (priority services × towns), §9.4. */
+  serpQueryCap: integer("serp_query_cap").notNull().default(30),
   notifications: jsonb("notifications")
     .$type<NotificationPrefs>()
     .notNull()
@@ -200,6 +202,8 @@ export const clients = pgTable(
     githubRepo: text("github_repo"),
     githubDefaultBranch: text("github_default_branch"),
     siteguruSiteId: text("siteguru_site_id"),
+    /** Search Console property, e.g. "sc-domain:example.co.uk" or "https://www.example.co.uk/". */
+    gscProperty: text("gsc_property"),
     gbpLocationId: text("gbp_location_id"),
     onboarding: jsonb("onboarding").$type<OnboardingState>().notNull().default({}),
     createdAt: createdAt(),
@@ -286,7 +290,7 @@ export const pages = pgTable(
 // ── Opportunities ────────────────────────────────────────────────────────
 
 export type EvidenceItem = {
-  source: "siteguru" | "gbp" | "serp" | "crawl";
+  source: "siteguru" | "gsc" | "dataforseo" | "gbp" | "serp" | "crawl";
   metric: string;
   value: string | number;
   period?: string;
@@ -644,7 +648,32 @@ export const siteguruSignals = pgTable(
       .notNull()
       .references(() => clients.id),
     capturedAt: ts("captured_at").notNull().defaultNow(),
+    /** "siteguru", or "gsc" for signals from Search Console + the DataForSEO site audit. */
+    source: text("source").notNull().default("siteguru"),
     signals: jsonb("signals").$type<Record<string, unknown>>().notNull(),
   },
   (t) => [index("siteguru_signals_client_idx").on(t.clientId, t.capturedAt)],
+);
+
+/** DataForSEO site-audit crawls. A scan starts one; detection reads the latest finished one. */
+export const siteAudits = pgTable(
+  "site_audits",
+  {
+    id: id(),
+    clientId: uuid("client_id")
+      .notNull()
+      .references(() => clients.id),
+    provider: text("provider").notNull().default("dataforseo"),
+    taskId: text("task_id").notNull(),
+    status: text("status").notNull().default("crawling"), // crawling | finished | failed
+    startedAt: ts("started_at").notNull().defaultNow(),
+    finishedAt: ts("finished_at"),
+    pagesCrawled: integer("pages_crawled"),
+    /** To-do items in the Signals["todo"] shape. */
+    todo: jsonb("todo").$type<Record<string, unknown>[]>(),
+    summary: jsonb("summary").$type<Record<string, unknown>>(),
+    costUsd: real("cost_usd"),
+    error: text("error"),
+  },
+  (t) => [index("site_audits_client_idx").on(t.clientId, t.startedAt), uniqueIndex("site_audits_task_uq").on(t.taskId)],
 );

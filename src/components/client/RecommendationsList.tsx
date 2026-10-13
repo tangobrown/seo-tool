@@ -38,7 +38,7 @@ export type RecItem = {
   draft: { title: string; body: string } | null;
 };
 
-export const SOURCE_LABEL: Record<string, string> = { siteguru: "SiteGuru", gbp: "GBP", serp: "SERP", crawl: "Site crawl" };
+export const SOURCE_LABEL: Record<string, string> = { siteguru: "SiteGuru", gsc: "Search Console", dataforseo: "Site audit", gbp: "GBP", serp: "Google results", crawl: "Site crawl" };
 export const EXECUTION_LABEL: Record<string, string> = {
   github_pr: "Claude Code → GitHub PR",
   content_generation: "Claude Code → GitHub PR",

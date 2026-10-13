@@ -11,14 +11,18 @@ import { formatDateTime } from "@/lib/format";
 import { saveIntegrationKey, testIntegration } from "@/server/actions/integrations";
 
 type KeySource = "app" | "env" | null;
+type Keyed = "siteguru" | "anthropic" | "gsc" | "dataforseo" | "pagespeed";
+const KEYED = new Set<string>(["siteguru", "anthropic", "gsc", "dataforseo", "pagespeed"]);
 
 type Row = { provider: string; status: string; lastSuccessAt: string | null; lastFailureAt: string | null; lastError: string | null; account: string | null };
 
 const PROVIDERS = [
-  { key: "siteguru", name: "SiteGuru", letter: "SG", desc: "SEO data: technical issues, rankings, traffic" },
+  { key: "gsc", name: "Google Search Console", letter: "SC", desc: "Real clicks, impressions and searches for each client (service account)" },
+  { key: "dataforseo", name: "DataForSEO", letter: "DF", desc: "Site audits, and Google and map rankings for each service and town" },
+  { key: "pagespeed", name: "PageSpeed Insights", letter: "PS", desc: "Mobile speed scores. Works without a key; a key raises Google’s limit" },
+  { key: "siteguru", name: "SiteGuru", letter: "SG", desc: "SEO data for clients without Search Console linked" },
   { key: "github", name: "GitHub", letter: "GH", desc: "GitHub App: client repos, setup PRs and Claude Code runs" },
   { key: "gbp", name: "Google Business Profile", letter: "G", desc: "Profile, performance and reviews; supported edits" },
-  { key: "serp", name: "SERP provider", letter: "S", desc: "DataForSEO: local pack and organic rankings" },
   { key: "anthropic", name: "Anthropic", letter: "A", desc: "Classification, recommendation text, reports and drafts" },
   { key: "slack", name: "Slack", letter: "#", desc: "Notifications when something needs you" },
 ] as const;
@@ -32,7 +36,7 @@ export function IntegrationsSettings({
   canStoreKeys,
 }: {
   rows: Row[];
-  keys: { siteguru: KeySource; anthropic: KeySource };
+  keys: Record<Keyed, KeySource>;
   canStoreKeys: boolean;
   githubInstallUrl: string | null;
   githubConfigured: boolean;
@@ -45,7 +49,7 @@ export function IntegrationsSettings({
         let status = r?.status ?? "not_connected";
         // Key-based providers: configured env means connected unless calls are failing.
         if (p.key === "anthropic" && env.anthropic && status === "not_connected") status = "connected";
-        if (p.key === "serp" && env.serp && status === "not_connected") status = "connected";
+        if ((p.key === "gsc" || p.key === "dataforseo") && keys[p.key] && status === "not_connected") status = "connected";
         if (p.key === "slack" && env.slack && status === "not_connected") status = "connected";
         let action: React.ReactNode = null;
         if (p.key === "github") {
@@ -65,10 +69,8 @@ export function IntegrationsSettings({
               {env.slack ? "Change webhook" : "Add webhook"}
             </Link>
           );
-        } else if (p.key === "serp") {
-          action = <span className="text-[12px] text-subtle-2">DataForSEO arrives in Phase 7</span>;
         }
-        const keyed = p.key === "siteguru" || p.key === "anthropic" ? p.key : null;
+        const keyed = KEYED.has(p.key) ? (p.key as Keyed) : null;
         return (
           <IntegrationRow key={p.key} p={p} status={status} r={r} action={action}>
             {keyed && <KeyEditor provider={keyed} source={keys[keyed]} canStore={canStoreKeys} />}
@@ -141,12 +143,20 @@ function IntegrationRow({
   );
 }
 
-const KEY_HELP = {
+const KEY_HELP: Record<Keyed, { label: string; where: string; env: string; multiline?: boolean }> = {
   siteguru: { label: "SiteGuru API key", where: "SiteGuru → API access → create a key (needs a plan with MCP access).", env: "SITEGURU_API_KEY" },
   anthropic: { label: "Anthropic API key", where: "console.anthropic.com → API keys.", env: "ANTHROPIC_API_KEY" },
-} as const;
+  gsc: {
+    label: "Paste the whole JSON key file",
+    where: "Google Cloud → IAM & Admin → Service accounts → your account → Keys → Add key → JSON. Open the downloaded file and paste everything in it.",
+    env: "GOOGLE_SERVICE_ACCOUNT_JSON",
+    multiline: true,
+  },
+  dataforseo: { label: "login:password", where: "DataForSEO → API Access. Enter your API login, a colon, then the API password (not your account password).", env: "DATAFORSEO_LOGIN/PASSWORD" },
+  pagespeed: { label: "Google API key", where: "Optional. Google Cloud → APIs & Services → Credentials → Create API key, restricted to the PageSpeed Insights API.", env: "GOOGLE_PAGESPEED_API_KEY" },
+};
 
-function KeyEditor({ provider, source, canStore }: { provider: "siteguru" | "anthropic"; source: KeySource; canStore: boolean }) {
+function KeyEditor({ provider, source, canStore }: { provider: Keyed; source: KeySource; canStore: boolean }) {
   const router = useRouter();
   const toast = useToast();
   const [editing, setEditing] = useState(false);
@@ -214,16 +224,28 @@ function KeyEditor({ provider, source, canStore }: { provider: "siteguru" | "ant
           <p className="mb-1.5 text-subtle-2">{help.where}</p>
           {!canStore && <p className="mb-1.5 text-negative">Set ENCRYPTION_KEY in Vercel first, so keys can be stored encrypted.</p>}
           <div className="flex flex-col gap-2 md:flex-row">
-            <input
-              className={fieldInputClass}
-              type="password"
-              autoComplete="off"
-              autoCapitalize="none"
-              spellCheck={false}
-              placeholder={help.label}
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-            />
+            {help.multiline ? (
+              <textarea
+                className={cx(fieldInputClass, "min-h-28 font-mono text-[12px]")}
+                autoComplete="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                placeholder={help.label}
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+              />
+            ) : (
+              <input
+                className={fieldInputClass}
+                type="password"
+                autoComplete="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                placeholder={help.label}
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+              />
+            )}
             <Button type="submit" disabled={pending || !value.trim() || !canStore} className="min-h-11 md:min-h-0">
               {pending ? "Saving…" : "Save and test"}
             </Button>

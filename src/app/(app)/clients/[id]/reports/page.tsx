@@ -8,6 +8,7 @@ import { Tag } from "@/components/ui/Tag";
 import { formatDate, formatDayMonth, formatMonthShort, formatMonthYear, formatNumber, periodOf } from "@/lib/format";
 import { previousPeriod } from "@/domain/schedule";
 import { getClient, getReportsOverview } from "@/server/queries";
+import { getLocalVisibility } from "@/server/serp";
 
 function delta(curr: number | null | undefined, prev: number | null | undefined, lowerIsBetter = false): Kpi["delta"] {
   if (curr == null || prev == null || prev === 0) return null;
@@ -24,7 +25,7 @@ export default async function ReportsPage({ params }: { params: Promise<{ id: st
   const { id } = await params;
   const data = await getClient(id);
   if (!data) notFound();
-  const { rolling, months, reports } = await getReportsOverview(id);
+  const [{ rolling, months, reports }, local] = await Promise.all([getReportsOverview(id), getLocalVisibility(id)]);
   const base = `/clients/${id}/reports`;
   const lastPeriod = previousPeriod(periodOf(new Date()));
   const canGenerate = data.client.status === "active" && data.client.includeInMonthlyReport && !reports.some((r) => r.period === lastPeriod);
@@ -109,9 +110,37 @@ export default async function ReportsPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
+      {local.rows.length > 0 && (
+        <div className="mt-9">
+          <div className="mb-2 flex flex-col gap-0.5 md:flex-row md:items-baseline md:justify-between md:gap-3">
+            <h2 className="text-[16px] font-semibold">Local visibility</h2>
+            <span className="text-[12px] text-subtle-2">Checked {formatDayMonth(local.rows[0]!.checkedAt)} · change vs ~30 days ago</span>
+          </div>
+          <div className="flex border-b border-line py-[7px] text-[12px] text-subtle-2">
+            <span className="min-w-0 flex-1">Search</span>
+            <span className="w-[76px] text-right">Map</span>
+            <span className="w-[76px] text-right">Google</span>
+          </div>
+          {local.rows.map((r) => (
+            <div key={r.query} className="flex items-center border-b border-line py-[7px]">
+              <span className="min-w-0 flex-1 truncate">
+                {r.service} <span className="text-muted">· {r.location}</span>
+              </span>
+              <Position value={r.localPosition} change={r.localChange} />
+              <Position value={r.organicPosition} change={r.organicChange} />
+            </div>
+          ))}
+          {local.competitors.length > 0 && (
+            <p className="mt-2 text-[13px] text-muted">
+              Competitors seen most often: {local.competitors.map((c) => c.domain).join(", ")}
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="mt-10">
         <h2 className="mb-1.5 text-[16px] font-semibold">Monthly reports</h2>
-        <p className="mb-3 text-[13px] text-muted">A summary of the previous month is generated on the 1st of each month.</p>
+        <p className="mb-3 text-[13px] text-muted">A summary of the previous month is generated early each month, once Google has reported the whole month (by the 5th).</p>
         {reports.length === 0 && !canGenerate && <div className="py-3 text-subtle-2">The first report generates on {formatDate(nextFirst(now))}.</div>}
         {canGenerate && (
           <div className="mb-2 text-[13px]">
@@ -130,5 +159,20 @@ export default async function ReportsPage({ params }: { params: Promise<{ id: st
         ))}
       </div>
     </div>
+  );
+}
+
+/** "#3 ↑1" — positions, lower is better; "—" when the client isn't in the results checked. */
+function Position({ value, change }: { value: number | null; change: number | null }) {
+  return (
+    <span className="w-[76px] text-right">
+      {value != null ? `#${value}` : <span className="text-subtle-2">—</span>}
+      {change != null && change !== 0 && (
+        <span className={`ml-1 text-[12px] ${change > 0 ? "text-positive" : "text-negative"}`}>
+          {change > 0 ? "↑" : "↓"}
+          {Math.abs(change)}
+        </span>
+      )}
+    </span>
   );
 }

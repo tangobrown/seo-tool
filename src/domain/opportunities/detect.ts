@@ -17,6 +17,14 @@ function plural(count: number, one: string, many = `${one}s`) {
   return `${n(count)} ${count === 1 ? one : many}`;
 }
 
+/** Evidence source labels follow the provider that supplied the data. */
+function searchSrc(input: DetectionInput) {
+  return input.signals.sources?.search ?? "siteguru";
+}
+function auditSrc(input: DetectionInput) {
+  return input.signals.sources?.audit ?? "siteguru";
+}
+
 function isCommercial(path: string, pages: DetectionInput["pages"]): boolean {
   const p = pages.find((x) => x.path === path || x.path === path.replace(/\/$/, ""));
   // Product and category pages are usually classified "other", so only these are non-commercial.
@@ -45,7 +53,7 @@ const TODO_RULES: Record<string, TodoRule> = {
     type: "technical_issue", category: "technical", actionKey: "indexability", targetUrl: null, targetQuery: null,
     title: (p) => `Check indexation settings on ${plural(p, "page")}`,
     why: "Pages set to noindex, or with conflicting signals, can't appear in Google. Some may be intentional, so this needs a human check.",
-    proposedAction: "Review the listed pages in SiteGuru’s indexation report and confirm which should be indexable. Changing indexation is never automatic.",
+    proposedAction: "Review the listed pages and confirm which should be indexable. Changing indexation is never automatic.",
     expectedBenefit: "Pages that should rank become eligible to appear in search.",
     impact: 8, commercialValue: 6, confidence: 6, effort: 2, risk: 5, executionType: "manual_action", riskLabel: "medium",
   },
@@ -100,6 +108,30 @@ const TODO_RULES: Record<string, TodoRule> = {
     impact: 5, commercialValue: 5, confidence: 6, effort: 2, risk: 1, executionType: "github_pr", riskLabel: "low",
     autoApproveKind: "schema",
   },
+  pageTitles: {
+    type: "metadata", category: "on_page", actionKey: "titles", targetUrl: null, targetQuery: null,
+    title: (p) => `Fix missing or duplicate page titles on ${plural(p, "page")}`,
+    why: "The title is the headline Google shows. Missing or repeated titles make pages harder to rank and less likely to be clicked.",
+    proposedAction: "Give each affected page a unique, descriptive title under 60 characters via the Metadata API, based on what the page is about.",
+    expectedBenefit: "Clearer search listings and better relevance for each page.",
+    impact: 6, commercialValue: 6, confidence: 8, effort: 2, risk: 1, executionType: "github_pr", riskLabel: "low",
+  },
+  metaDescriptions: {
+    type: "metadata", category: "on_page", actionKey: "descriptions", targetUrl: null, targetQuery: null,
+    title: (p) => `Write meta descriptions for ${plural(p, "page")}`,
+    why: "Without a unique description Google picks its own snippet, which is often less persuasive.",
+    proposedAction: "Add a unique meta description under 160 characters to each affected page via the Metadata API, summarising the page for a searcher.",
+    expectedBenefit: "More clicks from the same search positions.",
+    impact: 4, commercialValue: 5, confidence: 7, effort: 2, risk: 1, executionType: "github_pr", riskLabel: "low",
+  },
+  headings: {
+    type: "metadata", category: "on_page", actionKey: "h1", targetUrl: null, targetQuery: null,
+    title: (p) => `Add a main heading to ${plural(p, "page")}`,
+    why: "The H1 tells visitors and search engines what a page is about.",
+    proposedAction: "Give each affected page one clear H1 that describes its content. No other layout changes.",
+    expectedBenefit: "Clearer pages for visitors and search engines.",
+    impact: 4, commercialValue: 4, confidence: 7, effort: 2, risk: 1, executionType: "github_pr", riskLabel: "low",
+  },
   ogTags: {
     type: "metadata", category: "on_page", actionKey: "og_tags", targetUrl: null, targetQuery: null,
     title: (p) => `Add social sharing tags to ${plural(p, "page")}`,
@@ -126,7 +158,7 @@ function fromTodo(input: DetectionInput): Candidate[] {
     const pages = typeof t.affectedPages === "number" && t.affectedPages > 0 ? t.affectedPages : 1;
     const description = t.description?.trim() || t.title;
     const evidence: EvidenceItem[] = [
-      { source: "siteguru", metric: t.title.toLowerCase(), value: typeof t.affectedPages === "number" ? `${n(pages)} pages` : "site-wide", note: description, url: t.reportUrl },
+      { source: auditSrc(input), metric: t.title.toLowerCase(), value: typeof t.affectedPages === "number" ? `${n(pages)} pages` : "site-wide", note: description, url: t.reportUrl },
     ];
     const { title, critical, ...rest } = rule;
     out.push({
@@ -171,7 +203,7 @@ function fromLowHangingFruit(input: DetectionInput): Candidate[] {
       proposedAction: `Rework the title, meta description, H1 and opening copy of ${path} around “${top.keyword}”, and add internal links to it using that phrase.`,
       expectedBenefit: "More clicks from searches that already show this page.",
       evidence: kws.slice(0, 3).map((k) => ({
-        source: "siteguru" as const,
+        source: searchSrc(input),
         metric: "position",
         value: `#${k.avgPosition.toFixed(1)}`,
         period: "last 90 days",
@@ -209,8 +241,8 @@ function fromDeclining(input: DetectionInput): Candidate[] {
       proposedAction: `Update outdated sections of ${p.path}, tighten the title and meta description, and add a short FAQ answering common questions.`,
       expectedBenefit: "Recover lost clicks on an established page.",
       evidence: [
-        { source: "siteguru" as const, metric: "monthly clicks", value: `${n(p.oldestClicks)} → ${n(p.newestClicks)}`, period: `${monthName(p.fromMonth)}–${monthName(p.toMonth)}`, url: p.path },
-        { source: "siteguru" as const, metric: "change", value: `-${pct(p.percentChange)}`, period: "6 months", url: p.path },
+        { source: searchSrc(input), metric: "monthly clicks", value: `${n(p.oldestClicks)} → ${n(p.newestClicks)}`, period: `${monthName(p.fromMonth)}–${monthName(p.toMonth)}`, url: p.path },
+        { source: searchSrc(input), metric: "change", value: `-${pct(p.percentChange)}`, period: "6 months", url: p.path },
       ],
       impact: Math.abs(p.netChange) >= 100 ? 8 : Math.abs(p.netChange) >= 40 ? 7 : 6,
       commercialValue: isCommercial(p.path, input.pages) ? 7 : 4,
@@ -242,7 +274,7 @@ function fromCannibalization(input: DetectionInput): Candidate[] {
       proposedAction: `Make ${k.pages[0]!.path} the clear page for “${k.keyword}”: adjust the other page’s title and headings to its own topic and link it to ${k.pages[0]!.path}. No pages are removed or redirected.`,
       expectedBenefit: "One stronger page ranking higher for the query.",
       evidence: k.pages.slice(0, 3).map((p) => ({
-        source: "siteguru" as const,
+        source: searchSrc(input),
         metric: "position",
         value: p.avgPosition != null ? `#${p.avgPosition.toFixed(1)}` : "—",
         period: "last 90 days",
@@ -286,8 +318,8 @@ function fromTopPages(input: DetectionInput): Candidate[] {
       proposedAction: `Rewrite the title tag and meta description of ${p.path} to match what searchers want and give a clear reason to click.`,
       expectedBenefit: "More clicks without needing a higher ranking.",
       evidence: [
-        { source: "siteguru", metric: "click-through rate", value: `${(ctr * 100).toFixed(1)}%`, period: "last 30 days", url: p.path, note: `${n(p.clicks)} clicks from ${n(p.impressions)} impressions` },
-        { source: "siteguru", metric: "average position", value: p.avgPosition.toFixed(1), period: "last 30 days", url: p.path },
+        { source: searchSrc(input), metric: "click-through rate", value: `${(ctr * 100).toFixed(1)}%`, period: "last 30 days", url: p.path, note: `${n(p.clicks)} clicks from ${n(p.impressions)} impressions` },
+        { source: searchSrc(input), metric: "average position", value: p.avgPosition.toFixed(1), period: "last 30 days", url: p.path },
       ],
       impact: p.impressions >= 5000 ? 8 : 6,
       commercialValue: isCommercial(p.path, input.pages) ? 7 : 4,
@@ -357,7 +389,7 @@ function fromPages(input: DetectionInput): Candidate[] {
       expectedBenefit: "A page that can rank for searches about this service.",
       evidence: [
         { source: "crawl", metric: "dedicated page", value: "none found", note: `${input.pages.length} pages crawled` },
-        ...demand.slice(0, 2).map((k) => ({ source: "siteguru" as const, metric: "impressions", value: n(k.impressions), period: k.period, note: `“${k.keyword}”` })),
+        ...demand.slice(0, 2).map((k) => ({ source: searchSrc(input), metric: "impressions", value: n(k.impressions), period: k.period, note: `“${k.keyword}”` })),
       ],
       impact: 8, commercialValue: 9, confidence: demand.length ? 7 : 5, effort: 5, risk: 2, executionType: "github_pr", riskLabel: "low", severity: "normal",
       service, newPage: true,
@@ -376,9 +408,84 @@ function fromPages(input: DetectionInput): Candidate[] {
       why: "Local searches favour pages that clearly serve that town.",
       proposedAction: `Add a ${location} page describing the services offered there, using only the client’s real services. Link it from the areas served section.`,
       expectedBenefit: "Visibility for searches that include the town name.",
-      evidence: demand.slice(0, 3).map((k) => ({ source: "siteguru" as const, metric: "impressions", value: n(k.impressions), period: k.period, note: `“${k.keyword}”` })),
+      evidence: demand.slice(0, 3).map((k) => ({ source: searchSrc(input), metric: "impressions", value: n(k.impressions), period: k.period, note: `“${k.keyword}”` })),
       impact: 7, commercialValue: 8, confidence: 6, effort: 5, risk: 2, executionType: "github_pr", riskLabel: "low", severity: "normal",
       location, newPage: true,
+    });
+  }
+  return out;
+}
+
+
+// ── Tracked local searches (DataForSEO) → map pack and page-two rankings ───────
+
+function pathOfUrl(url: string): string {
+  try {
+    return new URL(url).pathname.replace(/\/+$/, "") || "/";
+  } catch {
+    return url;
+  }
+}
+
+function listNames(xs: string[]): string {
+  return xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
+}
+
+function fromSerp(input: DetectionInput): Candidate[] {
+  const results = input.signals.serp ?? [];
+  const out: Candidate[] = [];
+
+  // Map pack: one recommendation per service, naming the towns where the client isn't in the top 3.
+  const missing = new Map<string, typeof results>();
+  for (const r of results) {
+    if (r.local.length < 3 || (r.localPosition != null && r.localPosition <= 3)) continue;
+    const list = missing.get(r.service) ?? [];
+    list.push(r);
+    missing.set(r.service, list);
+  }
+  for (const [service, rs] of missing) {
+    const towns = rs.map((r) => r.location);
+    out.push({
+      type: "local_visibility", category: "local", family: "serp", actionKey: `map_pack:${slug(service)}`,
+      targetUrl: null, targetQuery: rs[0]!.query,
+      title: `Get into Google’s map results for ${service.toLowerCase()} in ${listNames(towns.slice(0, 3))}${towns.length > 3 ? " and more" : ""}`,
+      description: `For ${plural(rs.length, "tracked search", "tracked searches")} the business isn’t in the top 3 map results, which most local searchers choose from.`,
+      why: "The map results sit above the normal results for local searches and take most of the calls.",
+      proposedAction: `In Google Business Profile, check ${service} is listed as a service and ${listNames(towns)} ${towns.length === 1 ? "is" : "are"} in the service area. Add recent photos of ${service.toLowerCase()} work, and ask happy customers in these towns for a review. These are manual steps until the Business Profile connection is live.`,
+      expectedBenefit: "More calls and direction requests from people searching in these towns.",
+      evidence: rs.slice(0, 3).map((r) => ({
+        source: "serp" as const,
+        metric: "map position",
+        value: r.localPosition != null ? `#${r.localPosition}` : "not in top results",
+        note: `“${r.query}” (searched from ${r.location}). Top 3: ${r.local.slice(0, 3).map((l) => l.title).join(", ")}`,
+      })),
+      impact: 7, commercialValue: 8, confidence: 5, effort: 4, risk: 1, executionType: "manual_action", riskLabel: "low", severity: "normal",
+      service,
+    });
+  }
+
+  // Page two: the client ranks 11–30 for a service × town search. Skip ones the near-miss rule already covers.
+  const lhf = new Set((input.signals.lowHangingFruit ?? []).map((k) => `${k.keyword.toLowerCase()}|${k.path}`));
+  for (const r of results) {
+    if (r.organicPosition == null || r.organicPosition < 11 || r.organicPosition > 30 || !r.organicUrl) continue;
+    const path = pathOfUrl(r.organicUrl);
+    if (lhf.has(`${r.query}|${path}`)) continue;
+    const pageOne = r.organic.filter((o) => o.position <= 3).map((o) => o.domain);
+    out.push({
+      type: "existing_page_optimisation", category: "on_page", family: "serp", actionKey: `serp_rank:${slug(r.query)}`,
+      targetUrl: path, targetQuery: r.query,
+      title: `Move ${path === "/" ? "the homepage" : path} onto page one for “${r.query}”`,
+      description: `Ranks #${r.organicPosition} in Google for “${r.query}” when searched from ${r.location}.`,
+      why: "Almost nobody clicks through to page two. Pages just off page one often need only clearer local relevance to move up.",
+      proposedAction: `Strengthen ${path} for “${r.query}”: mention ${r.service.toLowerCase()} in ${r.location} in the title, H1 and opening copy, add a short section about the service in ${r.location}, and link to the page from related pages. Only the client’s real services and areas are used.`,
+      expectedBenefit: "A page-one position for a search with clear buying intent.",
+      evidence: [
+        { source: "serp", metric: "Google position", value: `#${r.organicPosition}`, url: path, note: `“${r.query}” searched from ${r.location}` },
+        ...(pageOne.length ? [{ source: "serp" as const, metric: "top 3", value: pageOne.join(", "), note: `“${r.query}”` }] : []),
+      ],
+      impact: r.organicPosition <= 15 ? 7 : 6, commercialValue: isCommercial(path, input.pages) ? 8 : 5, confidence: 6, effort: 3, risk: 2,
+      executionType: "github_pr", riskLabel: "low", severity: "normal",
+      service: r.service, location: r.location,
     });
   }
   return out;
@@ -394,6 +501,7 @@ export function detect(input: DetectionInput): { candidates: Candidate[]; evalua
   if (s.cannibalization) evaluated.add("cannibalization");
   if (s.topPages) evaluated.add("topPages");
   if (input.pages.length) evaluated.add("pages");
+  if (s.serp) evaluated.add("serp");
   const candidates = [
     ...fromTodo(input),
     ...fromLowHangingFruit(input),
@@ -401,6 +509,7 @@ export function detect(input: DetectionInput): { candidates: Candidate[]; evalua
     ...fromCannibalization(input),
     ...fromTopPages(input),
     ...fromPages(input),
+    ...fromSerp(input),
   ].filter((c) => c.evidence.length > 0); // §10.3: never without evidence
   return { candidates, evaluated };
 }

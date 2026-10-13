@@ -21,7 +21,7 @@ import {
   updateClientField,
   type ClientField,
 } from "@/server/actions/clients";
-import { listSiteguruSites, syncSiteguruNow } from "@/server/actions/integrations";
+import { listGscProperties, listSiteguruSites, syncGscNow, syncSiteguruNow } from "@/server/actions/integrations";
 
 type ClientData = {
   id: string;
@@ -67,12 +67,14 @@ export function ClientSettings({
   tiers,
   connections,
   blog,
+  compare,
 }: {
   client: ClientData;
   tiers: TierData[];
   connections: Connection[];
   /** This month's blog posts: planned so far vs the tier's commitment. */
   blog?: { planned: number; committed: number };
+  compare?: SourceComparison;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -231,7 +233,7 @@ export function ClientSettings({
       </Section>
 
       <Section title="Connections">
-        <Connections clientId={client.id} connections={connections} />
+        <Connections clientId={client.id} connections={connections} compare={compare} />
       </Section>
 
       <Section title="Automation">
@@ -301,10 +303,12 @@ const STEP_LABEL: Record<string, string> = {
   website: "Check website",
   github: "Check GitHub repository",
   setup_pr: "Open setup pull request",
+  gsc: "Match Search Console property",
   siteguru: "Match SiteGuru site",
   gbp: "Match Google Business Profile",
   crawl: "Crawl the site",
   discovery: "Find services and locations",
+  gsc_sync: "First Search Console sync",
   siteguru_sync: "First SiteGuru sync",
 };
 
@@ -365,6 +369,7 @@ function OnboardingProgress({ clientId, steps, createdAt }: { clientId: string; 
 const CONNECTION_ROWS = [
   { provider: "website", label: "Website" },
   { provider: "github", label: "GitHub repository" },
+  { provider: "gsc", label: "Search Console property" },
   { provider: "siteguru", label: "SiteGuru site" },
   { provider: "gbp", label: "Google Business Profile location" },
 ] as const;
@@ -377,7 +382,10 @@ const STATUS_TEXT: Record<string, { label: string; cls: string }> = {
   pending: { label: "Checking…", cls: "text-subtle-2" },
 };
 
-function Connections({ clientId, connections }: { clientId: string; connections: Connection[] }) {
+/** Last-30-day clicks from each source, shown side by side while both run. */
+export type SourceComparison = { gsc: number | null; siteguru: number | null };
+
+function Connections({ clientId, connections, compare }: { clientId: string; connections: Connection[]; compare?: SourceComparison }) {
   const router = useRouter();
   const toast = useToast();
   const [editing, setEditing] = useState<string | null>(null);
@@ -385,11 +393,25 @@ function Connections({ clientId, connections }: { clientId: string; connections:
   const [pending, start] = useTransition();
   const [now] = useState(() => new Date());
   const [sgSites, setSgSites] = useState<{ domain: string; searchConsole: boolean | null }[] | null | "loading">(null);
+  const [gscSites, setGscSites] = useState<{ siteUrl: string }[] | null | "loading">(null);
+  const [gscEmail, setGscEmail] = useState<string | null>(null);
+  const [gscError, setGscError] = useState<string | null>(null);
 
   function openEditor(provider: string, current: string | null) {
     setDraft(current ?? "");
     if (editing === provider) return setEditing(null);
     setEditing(provider);
+    if (provider === "gsc") {
+      setGscSites("loading");
+      setGscError(null);
+      listGscProperties()
+        .then((r) => {
+          setGscSites(r.ok ? r.sites : null);
+          if (r.ok) setGscEmail(r.email);
+          else setGscError(r.error);
+        })
+        .catch(() => setGscSites(null));
+    }
     if (provider === "siteguru") {
       setSgSites("loading");
       listSiteguruSites()
@@ -414,6 +436,26 @@ function Connections({ clientId, connections }: { clientId: string; connections:
                 {conn?.lastSuccessAt ? ` · synced ${relativeTime(conn.lastSuccessAt, now)}` : ""}
               </div>
               {conn?.lastError && conn.status !== "connected" && <div className="text-[13px] text-negative">{conn.lastError}</div>}
+              {row.provider === "gsc" && compare && compare.gsc != null && compare.siteguru != null && (
+                <div className="text-[13px] text-muted">
+                  Last 30 days clicks: Search Console {compare.gsc.toLocaleString("en-GB")} · SiteGuru {compare.siteguru.toLocaleString("en-GB")}
+                </div>
+              )}
+              {row.provider === "gsc" && conn?.externalId && conn.status === "connected" && (
+                <button
+                  type="button"
+                  disabled={pending}
+                  className="min-h-9 text-[13px] font-medium hover:underline md:min-h-0"
+                  onClick={() =>
+                    start(async () => {
+                      const r = await syncGscNow(clientId);
+                      toast({ message: r.ok ? "Syncing with Search Console — this takes a few seconds" : r.error });
+                    })
+                  }
+                >
+                  Sync now
+                </button>
+              )}
               {row.provider === "siteguru" && conn?.externalId && conn.status === "connected" && (
                 <button
                   type="button"
@@ -429,13 +471,19 @@ function Connections({ clientId, connections }: { clientId: string; connections:
                   Sync now
                 </button>
               )}
+              {editing === "gsc" && row.provider === "gsc" && (gscError || (Array.isArray(gscSites) && gscSites.length === 0)) && (
+                <p className="mt-2 text-[13px] text-muted">
+                  {gscError ??
+                    `No properties shared yet. In the client’s Search Console, go to Settings → Users and permissions → Add user, enter ${gscEmail ?? "the service account email"} with Restricted permission, then try again.`}
+                </p>
+              )}
               {editing === row.provider && (
                 <form
                   className="mt-2 flex gap-2"
                   onSubmit={(e) => {
                     e.preventDefault();
                     start(async () => {
-                      const r = await setClientConnection(clientId, row.provider as "siteguru" | "gbp" | "github", draft);
+                      const r = await setClientConnection(clientId, row.provider as "siteguru" | "gsc" | "gbp" | "github", draft);
                       toast({ message: r.ok ? `${row.label} updated` : r.error });
                       if (r.ok) {
                         setEditing(null);
@@ -444,7 +492,16 @@ function Connections({ clientId, connections }: { clientId: string; connections:
                     });
                   }}
                 >
-                  {row.provider === "siteguru" && Array.isArray(sgSites) && sgSites.length > 0 ? (
+                  {row.provider === "gsc" && Array.isArray(gscSites) && gscSites.length > 0 ? (
+                    <select className={fieldInputClass} value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus>
+                      <option value="">Choose a Search Console property…</option>
+                      {gscSites.map((site) => (
+                        <option key={site.siteUrl} value={site.siteUrl}>
+                          {site.siteUrl}
+                        </option>
+                      ))}
+                    </select>
+                  ) : row.provider === "siteguru" && Array.isArray(sgSites) && sgSites.length > 0 ? (
                     <select className={fieldInputClass} value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus>
                       <option value="">Choose a SiteGuru site…</option>
                       {sgSites.map((site) => (
@@ -462,7 +519,11 @@ function Connections({ clientId, connections }: { clientId: string; connections:
                       placeholder={
                         row.provider === "github"
                           ? "owner/name"
-                          : row.provider === "siteguru"
+                          : row.provider === "gsc"
+                            ? gscSites === "loading"
+                              ? "Loading Search Console properties…"
+                              : "sc-domain:example.co.uk"
+                            : row.provider === "siteguru"
                             ? sgSites === "loading"
                               ? "Loading SiteGuru sites…"
                               : "www.example.co.uk"
@@ -486,7 +547,13 @@ function Connections({ clientId, connections }: { clientId: string; connections:
                   className="min-h-11 md:min-h-0"
                   disabled={pending}
                   onClick={() => {
-                    if (actionLabel === "Retry" && row.provider === "siteguru" && conn?.externalId) {
+                    if (actionLabel === "Retry" && row.provider === "gsc" && conn?.externalId) {
+                      start(async () => {
+                        const r = await syncGscNow(clientId);
+                        toast({ message: r.ok ? "Syncing with Search Console — this takes a few seconds" : r.error });
+                        router.refresh();
+                      });
+                    } else if (actionLabel === "Retry" && row.provider === "siteguru" && conn?.externalId) {
                       start(async () => {
                         const r = await syncSiteguruNow(clientId);
                         toast({ message: r.ok ? "Syncing with SiteGuru — this takes a few seconds" : r.error });
@@ -511,7 +578,7 @@ function Connections({ clientId, connections }: { clientId: string; connections:
         );
       })}
       <p className="mt-2 text-[12px] text-subtle-2">
-        SiteGuru sites come from your SiteGuru key (Settings → Integrations) and sync daily at 05:00. Google Business Profile locations arrive with the GBP integration.
+        Search Console syncs daily at 05:15 and, once linked, is used for this client’s numbers and recommendations instead of SiteGuru. SiteGuru syncs at 05:00. Google Business Profile locations arrive with the GBP integration.
       </p>
     </div>
   );

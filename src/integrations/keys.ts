@@ -8,7 +8,21 @@ import { decrypt, encrypt } from "@/lib/crypto";
 export const KEYED_PROVIDERS = {
   siteguru: "SITEGURU_API_KEY",
   anthropic: "ANTHROPIC_API_KEY",
+  /** The Google Cloud service account's JSON key file, pasted whole. */
+  gsc: "GOOGLE_SERVICE_ACCOUNT_JSON",
+  /** "login:password"; the env fallback joins DATAFORSEO_LOGIN and DATAFORSEO_PASSWORD. */
+  dataforseo: "DATAFORSEO_LOGIN",
+  /** Optional. PageSpeed Insights works without a key at low volume. */
+  pagespeed: "GOOGLE_PAGESPEED_API_KEY",
 } as const;
+
+function envValue(provider: KeyedProvider): string | null {
+  if (provider === "dataforseo") {
+    const { DATAFORSEO_LOGIN: login, DATAFORSEO_PASSWORD: password } = process.env;
+    return login && password ? `${login}:${password}` : null;
+  }
+  return process.env[KEYED_PROVIDERS[provider]] || null;
+}
 
 export type KeyedProvider = keyof typeof KEYED_PROVIDERS;
 
@@ -23,13 +37,13 @@ export async function getProviderKey(provider: KeyedProvider): Promise<string | 
       console.error(`Could not decrypt the stored ${provider} key; check ENCRYPTION_KEY`);
     }
   }
-  return process.env[KEYED_PROVIDERS[provider]] || null;
+  return envValue(provider);
 }
 
 export async function keySource(provider: KeyedProvider): Promise<"app" | "env" | null> {
   const [row] = await db.select({ secretEnc: integrations.secretEnc }).from(integrations).where(eq(integrations.provider, provider));
   if (row?.secretEnc) return "app";
-  return process.env[KEYED_PROVIDERS[provider]] ? "env" : null;
+  return envValue(provider) ? "env" : null;
 }
 
 export async function setProviderKey(provider: KeyedProvider, key: string | null) {

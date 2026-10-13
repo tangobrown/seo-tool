@@ -8,6 +8,8 @@ export const EVENTS = {
   clientOnboard: "client.onboard",
   clientActivated: "client.activated",
   siteguruSyncClient: "siteguru.sync.client",
+  gscSyncClient: "gsc.sync.client",
+  serpTrackClient: "serp.track.client",
   clientScan: "client.scan",
   githubBatchStart: "github.batch.start",
   deploymentVerify: "deployment.verify",
